@@ -117,7 +117,7 @@
     </header>
 
     <!-- ================= MAIN SPLIT-SCREEN WORKSPACE ================= -->
-    <div class="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden p-3 sm:p-5 gap-4 lg:gap-5 relative">
+    <div id="workspace-container" class="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden p-3 sm:p-5 gap-4 lg:gap-0 relative">
         
         <!-- ================= LEFT PANEL: STUDY RESOURCE & TIMESTAMPS (NO SCROLLBAR) ================= -->
         <section id="left-study-panel" class="lg:w-[63%] w-full flex-none lg:flex-1 lg:h-full flex flex-col lg:overflow-y-auto no-scrollbar space-y-4 transition-all duration-200">
@@ -325,6 +325,16 @@
                 </div>
             {% endif %}
         </section>
+
+        <!-- Resizable Splitter Divider (Desktop) -->
+        <div 
+            id="workspace-resizer" 
+            class="hidden lg:flex items-center justify-center w-3 hover:w-4 -mx-0.5 cursor-col-resize select-none shrink-0 group z-20 py-4 transition-all"
+            title="Drag to resize video and content sections (Double-click to reset)"
+            role="separator"
+            aria-orientation="vertical">
+            <div class="w-1 group-hover:w-1.5 h-16 rounded-full bg-slate-300 dark:bg-slate-700 group-hover:bg-indigo-500 dark:group-hover:bg-indigo-400 group-active:bg-indigo-600 transition-all duration-150 shadow-xs"></div>
+        </div>
 
         <!-- ================= RIGHT PANEL: FLOATING ISLAND SIDEBAR ================= -->
         <section id="right-workspace-sidebar" class="lg:w-[37%] w-full min-h-[520px] lg:min-h-0 lg:h-full flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs overflow-hidden transition-all duration-200">
@@ -1240,10 +1250,33 @@
         }
     }
 
+    // Apply Scalable Split Ratio (Video Panel vs Content Sidebar)
+    function applySplitRatio(ratio) {
+        const leftPanel = document.getElementById('left-study-panel');
+        const sidebar = document.getElementById('right-workspace-sidebar');
+        if (!leftPanel || !sidebar) return;
+
+        if (window.innerWidth < 1024) {
+            leftPanel.style.width = '';
+            leftPanel.style.flex = '';
+            sidebar.style.width = '';
+            sidebar.style.flex = '';
+            return;
+        }
+
+        // Clamp between 30% and 80%
+        const clamped = Math.max(30, Math.min(80, ratio));
+        leftPanel.style.width = `${clamped}%`;
+        leftPanel.style.flex = 'none';
+        sidebar.style.width = `calc(${100 - clamped}% - 0.75rem)`;
+        sidebar.style.flex = 'none';
+    }
+
     // Toggle entire Right Sidebar (Theater / Full-Screen Mode on desktop; Smooth jump or collapse on mobile)
     function toggleSidebar() {
         const sidebar = document.getElementById('right-workspace-sidebar');
         const leftPanel = document.getElementById('left-study-panel');
+        const resizer = document.getElementById('workspace-resizer');
         const toggleBtnText = document.getElementById('toggle-sidebar-text');
         if (!sidebar || !leftPanel) return;
 
@@ -1265,18 +1298,112 @@
         const isHidden = sidebar.classList.contains('hidden');
         if (isHidden) {
             sidebar.classList.remove('hidden');
-            leftPanel.classList.remove('lg:w-full');
-            leftPanel.classList.add('lg:w-[63%]');
+            if (resizer) resizer.classList.remove('hidden');
+            const savedRatio = parseFloat(localStorage.getItem('workspace-split-ratio')) || 63;
+            applySplitRatio(savedRatio);
             if (toggleBtnText) toggleBtnText.textContent = "Sidebar";
             localStorage.setItem('workspace-sidebar-hidden', 'false');
         } else {
             sidebar.classList.add('hidden');
-            leftPanel.classList.remove('lg:w-[63%]');
-            leftPanel.classList.add('lg:w-full');
+            if (resizer) resizer.classList.add('hidden');
+            leftPanel.style.width = '100%';
+            leftPanel.style.flex = '1';
             if (toggleBtnText) toggleBtnText.textContent = "Show Sidebar";
             localStorage.setItem('workspace-sidebar-hidden', 'true');
         }
     }
+
+    // ================= DRAGGABLE RESIZABLE SPLIT PANELS =================
+    (function initResizableSplitter() {
+        const resizer = document.getElementById('workspace-resizer');
+        const leftPanel = document.getElementById('left-study-panel');
+        const sidebar = document.getElementById('right-workspace-sidebar');
+        const container = document.getElementById('workspace-container');
+
+        if (!resizer || !leftPanel || !sidebar || !container) return;
+
+        let isDragging = false;
+
+        function onMouseDown(e) {
+            if (window.innerWidth < 1024) return;
+            isDragging = true;
+            leftPanel.style.transition = 'none';
+            sidebar.style.transition = 'none';
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+
+            // Disable pointer-events on iframes so dragging isn't intercepted by YouTube/PDF
+            document.querySelectorAll('iframe').forEach(iframe => {
+                iframe.style.pointerEvents = 'none';
+            });
+
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
+            window.addEventListener('touchmove', onMouseMove, { passive: false });
+            window.addEventListener('touchend', onMouseUp);
+        }
+
+        function onMouseMove(e) {
+            if (!isDragging) return;
+            const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0].clientX);
+            if (clientX === undefined) return;
+
+            const containerRect = container.getBoundingClientRect();
+            const newLeftWidth = clientX - containerRect.left;
+            const ratio = (newLeftWidth / containerRect.width) * 100;
+
+            applySplitRatio(ratio);
+        }
+
+        function onMouseUp() {
+            if (!isDragging) return;
+            isDragging = false;
+            leftPanel.style.transition = '';
+            sidebar.style.transition = '';
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+
+            document.querySelectorAll('iframe').forEach(iframe => {
+                iframe.style.pointerEvents = 'auto';
+            });
+
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+            window.removeEventListener('touchmove', onMouseMove);
+            window.removeEventListener('touchend', onMouseUp);
+
+            const containerRect = container.getBoundingClientRect();
+            const leftRect = leftPanel.getBoundingClientRect();
+            const savedRatio = (leftRect.width / containerRect.width) * 100;
+            localStorage.setItem('workspace-split-ratio', savedRatio.toFixed(2));
+        }
+
+        resizer.addEventListener('mousedown', onMouseDown);
+        resizer.addEventListener('touchstart', onMouseDown, { passive: true });
+
+        // Double click to reset to default 63%
+        resizer.addEventListener('dblclick', () => {
+            if (window.innerWidth >= 1024) {
+                applySplitRatio(63);
+                localStorage.removeItem('workspace-split-ratio');
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            if (window.innerWidth >= 1024) {
+                const isSidebarHidden = localStorage.getItem('workspace-sidebar-hidden') === 'true';
+                if (!isSidebarHidden) {
+                    const savedRatio = parseFloat(localStorage.getItem('workspace-split-ratio')) || 63;
+                    applySplitRatio(savedRatio);
+                }
+            } else {
+                leftPanel.style.width = '';
+                leftPanel.style.flex = '';
+                sidebar.style.width = '';
+                sidebar.style.flex = '';
+            }
+        });
+    })();
 
     // Module Accordion Expand / Collapse
     function toggleModuleAccordion(modId) {
@@ -1308,15 +1435,24 @@
             switchRightTab('content');
         }
 
-        if (window.innerWidth >= 1024 && localStorage.getItem('workspace-sidebar-hidden') === 'true') {
+        if (window.innerWidth >= 1024) {
+            const isSidebarHidden = localStorage.getItem('workspace-sidebar-hidden') === 'true';
             const sidebar = document.getElementById('right-workspace-sidebar');
             const leftPanel = document.getElementById('left-study-panel');
+            const resizer = document.getElementById('workspace-resizer');
             const toggleBtnText = document.getElementById('toggle-sidebar-text');
-            if (sidebar && leftPanel) {
-                sidebar.classList.add('hidden');
-                leftPanel.classList.remove('lg:w-[63%]');
-                leftPanel.classList.add('lg:w-full');
+
+            if (isSidebarHidden) {
+                if (sidebar) sidebar.classList.add('hidden');
+                if (resizer) resizer.classList.add('hidden');
+                if (leftPanel) {
+                    leftPanel.style.width = '100%';
+                    leftPanel.style.flex = '1';
+                }
                 if (toggleBtnText) toggleBtnText.textContent = "Show Sidebar";
+            } else {
+                const savedRatio = parseFloat(localStorage.getItem('workspace-split-ratio')) || 63;
+                applySplitRatio(savedRatio);
             }
         }
     })();
