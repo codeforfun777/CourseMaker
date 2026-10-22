@@ -151,50 +151,76 @@
                     </h1>
                 </div>
 
-                <!-- 3. Floating Timestamp Pills (Positioned directly below the title, matching lms_concept_design.jpg) -->
-                <div class="w-full">
-                    <div id="timestamps-container" class="flex flex-wrap items-center gap-2 py-1 select-none">
-                        {% for ts in lesson.timestamps.all %}
+                <!-- 3. Option B: Ultra-Minimal Chapter Dropdown & Navigation Controls -->
+                <div class="w-full py-0.5" id="chapter-nav-wrapper">
+                    <div class="relative inline-flex items-center gap-1.5 select-none">
+                        
+                        <!-- Previous Chapter Button (‹) -->
                         <button 
                             type="button" 
-                            onclick="seekToTime({{ ts.time_seconds }})" 
-                            id="timestamp-item-{{ ts.id }}"
-                            class="chapter-pill-item inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-slate-200/90 dark:border-slate-700/80 bg-white dark:bg-slate-850 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-2xs hover:border-indigo-400 dark:hover:border-indigo-600 transition group text-xs font-medium"
-                            title="Jump to {{ ts.formatted_time }} - {{ ts.label }}">
-                            <span class="font-mono font-bold text-indigo-600 dark:text-indigo-400">{{ ts.formatted_time }}</span>
-                            <span class="truncate max-w-[150px]">{{ ts.label }}</span>
-                            {% if is_owner %}
-                            <span onclick="event.stopPropagation(); deleteTimestamp({{ ts.id }});" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 ml-0.5 text-xs transition" title="Delete">&times;</span>
-                            {% endif %}
+                            id="chapter-prev-btn"
+                            onclick="prevChapter()" 
+                            class="w-8 h-8 rounded-full border border-slate-200/90 dark:border-slate-700/80 bg-white dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-sm font-bold shadow-2xs transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                            title="Previous Chapter"
+                            disabled>
+                            ‹
                         </button>
-                        {% empty %}
-                        <span id="no-timestamps-placeholder" class="text-xs text-slate-400 dark:text-slate-500 italic py-1">
-                            No chapter timestamps yet.
-                        </span>
-                        {% endfor %}
 
-                        <!-- Options Dropdown Pill (···) -->
+                        <!-- Chapter Dropdown Toggle Pill -->
+                        <button 
+                            type="button" 
+                            id="chapter-dropdown-btn" 
+                            onclick="toggleChapterDropdown(event)" 
+                            class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-slate-200/90 dark:border-slate-700/80 bg-white dark:bg-slate-850 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-2xs hover:border-indigo-400 dark:hover:border-indigo-600 transition text-xs font-medium cursor-pointer"
+                            title="Click to view all chapters">
+                            <span class="text-xs">⏱️</span>
+                            <span id="current-chapter-time" class="font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                                {% if lesson.timestamps.first %}{{ lesson.timestamps.first.formatted_time }}{% else %}--:--{% endif %}
+                            </span>
+                            <span id="current-chapter-label" class="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[140px] sm:max-w-[220px]">
+                                {% if lesson.timestamps.first %}{{ lesson.timestamps.first.label }}{% else %}No chapters yet{% endif %}
+                            </span>
+                            <span id="current-chapter-counter" class="text-[11px] font-normal text-slate-400 dark:text-slate-500">
+                                {% if lesson.timestamps.count %}(1 of {{ lesson.timestamps.count }}){% else %}(0){% endif %}
+                            </span>
+                            <svg id="chapter-dropdown-arrow" class="w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+
+                        <!-- Next Chapter Button (›) -->
+                        <button 
+                            type="button" 
+                            id="chapter-next-btn"
+                            onclick="nextChapter()" 
+                            class="w-8 h-8 rounded-full border border-slate-200/90 dark:border-slate-700/80 bg-white dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-sm font-bold shadow-2xs transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                            title="Next Chapter"
+                            {% if lesson.timestamps.count <= 1 %}disabled{% endif %}>
+                            ›
+                        </button>
+
+                        <!-- Owner Manage Options Menu (···) -->
                         {% if is_owner %}
-                        <div class="relative shrink-0" id="chapter-menu-wrapper">
+                        <div class="relative shrink-0 ml-0.5" id="chapter-menu-wrapper">
                             <button 
                                 type="button" 
-                                onclick="toggleChapterMenu()" 
+                                onclick="toggleChapterMenu(event)" 
                                 id="chapter-menu-btn"
-                                class="w-9 h-9 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-sm font-bold shadow-2xs transition" 
+                                class="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-xs font-bold shadow-2xs transition cursor-pointer" 
                                 title="Manage Chapters (Sync, Paste, Add)">
                                 ···
                             </button>
                             <!-- Dropdown Menu -->
                             <div id="chapter-menu-dropdown" class="hidden absolute left-0 bottom-full mb-2 w-52 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 py-2 z-40 text-xs overflow-hidden">
-                                <button type="button" onclick="syncYouTubeChapters(); toggleChapterMenu();" class="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 transition">
+                                <button type="button" onclick="syncYouTubeChapters(); toggleChapterMenu();" class="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 transition cursor-pointer">
                                     <span>⚡</span>
                                     <span>Sync from YouTube</span>
                                 </button>
-                                <button type="button" onclick="openPasteModal(); toggleChapterMenu();" class="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 transition">
+                                <button type="button" onclick="openPasteModal(); toggleChapterMenu();" class="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center gap-2 transition cursor-pointer">
                                     <span>📋</span>
                                     <span>Paste Chapters List</span>
                                 </button>
-                                <button type="button" onclick="openAddTimestampModal(); toggleChapterMenu();" class="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-2 transition">
+                                <button type="button" onclick="openAddTimestampModal(); toggleChapterMenu();" class="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-2 transition cursor-pointer">
                                     <span>➕</span>
                                     <span>Add Custom Chapter</span>
                                 </button>
@@ -208,6 +234,27 @@
                             </div>
                         </div>
                         {% endif %}
+
+                        <!-- Floating Chapter Popover Dropdown -->
+                        <div 
+                            id="chapter-popover-dropdown" 
+                            class="hidden absolute left-0 top-full mt-2 w-80 sm:w-96 max-h-72 overflow-hidden bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 z-40 text-xs flex flex-col">
+                            <!-- Popover Header -->
+                            <div class="px-4 py-2.5 flex items-center justify-between text-[11px] font-bold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-850/80 border-b border-slate-100 dark:border-slate-800 shrink-0">
+                                <span class="uppercase tracking-wider flex items-center gap-1.5">
+                                    <span>⏱️</span>
+                                    <span>Video Chapters</span>
+                                </span>
+                                <span id="popover-chapter-total-count" class="font-mono text-slate-400 dark:text-slate-500 font-medium">
+                                    {% if lesson.timestamps.count %}{{ lesson.timestamps.count }} chapters{% else %}0 chapters{% endif %}
+                                </span>
+                            </div>
+                            <!-- Scrollable Chapter Items List -->
+                            <div id="chapter-popover-items" class="py-1 max-h-56 overflow-y-auto divide-y divide-slate-100/60 dark:divide-slate-800/40">
+                                <!-- Populated dynamically by JS -->
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 
@@ -556,7 +603,29 @@
         }
     };
 
-    // Seek to given timestamp and highlight active pill
+    // Option B: Chapters Data & Navigation State
+    let chaptersList = [
+        {% for ts in lesson.timestamps.all %}
+        {
+            id: {{ ts.id }},
+            time_seconds: {{ ts.time_seconds }},
+            formatted_time: "{{ ts.formatted_time }}",
+            label: "{{ ts.label|escapejs }}"
+        }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+    let currentChapterIndex = 0;
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    // Seek to given timestamp
     function seekToTime(seconds) {
         if (ytPlayer && ytReady && typeof ytPlayer.seekTo === 'function') {
             ytPlayer.seekTo(seconds, true);
@@ -576,15 +645,192 @@
                 }), '*');
             }
         }
+    }
 
-        // Highlight clicked pill
-        document.querySelectorAll('.chapter-pill-item').forEach(el => {
-            el.classList.remove('bg-indigo-100', 'dark:bg-indigo-950/80', 'border-indigo-400', 'dark:border-indigo-600', 'text-indigo-950', 'dark:text-indigo-200');
-        });
-        const clickedPill = event ? event.currentTarget : null;
-        if (clickedPill && clickedPill.classList.contains('chapter-pill-item')) {
-            clickedPill.classList.add('bg-indigo-100', 'dark:bg-indigo-950/80', 'border-indigo-400', 'dark:border-indigo-600', 'text-indigo-950', 'dark:text-indigo-200');
+    function selectChapter(index, seek = true) {
+        if (!chaptersList || index < 0 || index >= chaptersList.length) return;
+        currentChapterIndex = index;
+        if (seek) {
+            seekToTime(chaptersList[index].time_seconds);
         }
+        updateChapterUI();
+        closeChapterDropdown();
+    }
+
+    function prevChapter() {
+        if (currentChapterIndex > 0) {
+            selectChapter(currentChapterIndex - 1);
+        }
+    }
+
+    function nextChapter() {
+        if (currentChapterIndex < chaptersList.length - 1) {
+            selectChapter(currentChapterIndex + 1);
+        }
+    }
+
+    function toggleChapterDropdown(event) {
+        if (event) event.stopPropagation();
+        const dropdown = document.getElementById('chapter-popover-dropdown');
+        const arrow = document.getElementById('chapter-dropdown-arrow');
+        if (!dropdown) return;
+
+        // Close owner menu if open
+        const menuDropdown = document.getElementById('chapter-menu-dropdown');
+        if (menuDropdown) menuDropdown.classList.add('hidden');
+
+        const isHidden = dropdown.classList.contains('hidden');
+        if (isHidden) {
+            dropdown.classList.remove('hidden');
+            if (arrow) arrow.classList.add('rotate-180');
+            // Scroll active item into view
+            const activeItem = dropdown.querySelector('.active-chapter-row');
+            if (activeItem) {
+                activeItem.scrollIntoView({ block: 'nearest' });
+            }
+        } else {
+            dropdown.classList.add('hidden');
+            if (arrow) arrow.classList.remove('rotate-180');
+        }
+    }
+
+    function closeChapterDropdown() {
+        const dropdown = document.getElementById('chapter-popover-dropdown');
+        const arrow = document.getElementById('chapter-dropdown-arrow');
+        if (dropdown) dropdown.classList.add('hidden');
+        if (arrow) arrow.classList.remove('rotate-180');
+    }
+
+    function updateChapterUI() {
+        const timeEl = document.getElementById('current-chapter-time');
+        const labelEl = document.getElementById('current-chapter-label');
+        const counterEl = document.getElementById('current-chapter-counter');
+        const prevBtn = document.getElementById('chapter-prev-btn');
+        const nextBtn = document.getElementById('chapter-next-btn');
+        const totalCountEl = document.getElementById('popover-chapter-total-count');
+        const itemsContainer = document.getElementById('chapter-popover-items');
+
+        if (!chaptersList || chaptersList.length === 0) {
+            if (timeEl) timeEl.textContent = '--:--';
+            if (labelEl) labelEl.textContent = 'No chapters yet';
+            if (counterEl) counterEl.textContent = '(0)';
+            if (prevBtn) prevBtn.disabled = true;
+            if (nextBtn) nextBtn.disabled = true;
+            if (totalCountEl) totalCountEl.textContent = '0 chapters';
+            if (itemsContainer) {
+                itemsContainer.innerHTML = `
+                    <div class="px-4 py-6 text-center text-slate-400 dark:text-slate-500 text-xs italic">
+                        No chapter timestamps yet.
+                        ${isOwner ? `
+                        <div class="mt-2.5">
+                            <button type="button" onclick="closeChapterDropdown(); openAddTimestampModal();" class="inline-flex items-center gap-1 px-3 py-1 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold rounded-lg hover:bg-indigo-100 transition cursor-pointer">
+                                <span>➕</span> Add first chapter
+                            </button>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+            return;
+        }
+
+        // Clamp index
+        if (currentChapterIndex < 0) currentChapterIndex = 0;
+        if (currentChapterIndex >= chaptersList.length) currentChapterIndex = chaptersList.length - 1;
+
+        const cur = chaptersList[currentChapterIndex];
+        if (timeEl) timeEl.textContent = cur.formatted_time;
+        if (labelEl) labelEl.textContent = cur.label;
+        if (counterEl) counterEl.textContent = `(${currentChapterIndex + 1} of ${chaptersList.length})`;
+        if (prevBtn) prevBtn.disabled = (currentChapterIndex <= 0);
+        if (nextBtn) nextBtn.disabled = (currentChapterIndex >= chaptersList.length - 1);
+        if (totalCountEl) totalCountEl.textContent = `${chaptersList.length} chapter${chaptersList.length > 1 ? 's' : ''}`;
+
+        if (itemsContainer) {
+            itemsContainer.innerHTML = '';
+            chaptersList.forEach((ch, idx) => {
+                const isActive = (idx === currentChapterIndex);
+                const row = document.createElement('div');
+                row.id = `popover-chapter-item-${ch.id}`;
+                row.className = `flex items-center justify-between px-3.5 py-2.5 cursor-pointer transition text-xs group ${
+                    isActive
+                        ? 'active-chapter-row bg-indigo-50/90 dark:bg-indigo-950/70 text-indigo-900 dark:text-indigo-100 font-semibold'
+                        : 'hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-300'
+                }`;
+                row.onclick = () => selectChapter(idx);
+                row.title = `Jump to ${ch.formatted_time} - ${ch.label}`;
+                row.innerHTML = `
+                    <div class="flex items-center gap-2.5 min-w-0 pr-2">
+                        <span class="font-mono text-xs font-bold ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'} shrink-0">${ch.formatted_time}</span>
+                        <span class="truncate">${escapeHtml(ch.label)}</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        ${isActive ? '<span class="text-indigo-600 dark:text-indigo-400 text-xs font-bold">✓</span>' : ''}
+                        ${isOwner ? `
+                        <button 
+                            type="button" 
+                            onclick="event.stopPropagation(); deleteTimestamp(${ch.id});" 
+                            class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 p-0.5 rounded text-xs transition cursor-pointer" 
+                            title="Delete chapter">
+                            &times;
+                        </button>
+                        ` : ''}
+                    </div>
+                `;
+                itemsContainer.appendChild(row);
+            });
+        }
+    }
+
+    function updateChapterPillOnly() {
+        if (!chaptersList || chaptersList.length === 0) return;
+        const cur = chaptersList[currentChapterIndex];
+        const timeEl = document.getElementById('current-chapter-time');
+        const labelEl = document.getElementById('current-chapter-label');
+        const counterEl = document.getElementById('current-chapter-counter');
+        const prevBtn = document.getElementById('chapter-prev-btn');
+        const nextBtn = document.getElementById('chapter-next-btn');
+
+        if (timeEl) timeEl.textContent = cur.formatted_time;
+        if (labelEl) labelEl.textContent = cur.label;
+        if (counterEl) counterEl.textContent = `(${currentChapterIndex + 1} of ${chaptersList.length})`;
+        if (prevBtn) prevBtn.disabled = (currentChapterIndex <= 0);
+        if (nextBtn) nextBtn.disabled = (currentChapterIndex >= chaptersList.length - 1);
+
+        const items = document.querySelectorAll('#chapter-popover-items > div');
+        items.forEach((item, idx) => {
+            const isActive = (idx === currentChapterIndex);
+            if (isActive) {
+                item.classList.add('active-chapter-row', 'bg-indigo-50/90', 'dark:bg-indigo-950/70', 'text-indigo-900', 'dark:text-indigo-100', 'font-semibold');
+                item.classList.remove('hover:bg-slate-50', 'text-slate-700', 'dark:text-slate-300');
+            } else {
+                item.classList.remove('active-chapter-row', 'bg-indigo-50/90', 'dark:bg-indigo-950/70', 'text-indigo-900', 'dark:text-indigo-100', 'font-semibold');
+                item.classList.add('text-slate-700', 'dark:text-slate-300');
+            }
+        });
+    }
+
+    let chapterTrackerInterval = null;
+    function startChapterTracking() {
+        if (chapterTrackerInterval) clearInterval(chapterTrackerInterval);
+        chapterTrackerInterval = setInterval(() => {
+            if (!chaptersList || chaptersList.length === 0) return;
+            const curSec = getCurrentVideoSeconds();
+            if (curSec <= 0) return;
+
+            let activeIdx = 0;
+            for (let i = 0; i < chaptersList.length; i++) {
+                if (chaptersList[i].time_seconds <= curSec) {
+                    activeIdx = i;
+                } else {
+                    break;
+                }
+            }
+            if (activeIdx !== currentChapterIndex) {
+                currentChapterIndex = activeIdx;
+                updateChapterPillOnly();
+            }
+        }, 1000);
     }
 
     function getCurrentVideoSeconds() {
@@ -620,18 +866,28 @@
     }
 
     // Chapter Tools Dropdown Menu (···)
-    function toggleChapterMenu() {
+    function toggleChapterMenu(event) {
+        if (event) event.stopPropagation();
+        closeChapterDropdown();
         const dropdown = document.getElementById('chapter-menu-dropdown');
         if (dropdown) dropdown.classList.toggle('hidden');
     }
 
-    // Close menu when clicking outside
+    // Close menus when clicking outside
     document.addEventListener('click', (e) => {
+        const navWrapper = document.getElementById('chapter-nav-wrapper');
+        const popover = document.getElementById('chapter-popover-dropdown');
+        if (popover && !popover.classList.contains('hidden')) {
+            if (!navWrapper || !navWrapper.contains(e.target)) {
+                closeChapterDropdown();
+            }
+        }
+
         const menuWrapper = document.getElementById('chapter-menu-wrapper');
-        const dropdown = document.getElementById('chapter-menu-dropdown');
-        if (dropdown && !dropdown.classList.contains('hidden')) {
-            if (menuWrapper && !menuWrapper.contains(e.target)) {
-                dropdown.classList.add('hidden');
+        const menuDropdown = document.getElementById('chapter-menu-dropdown');
+        if (menuDropdown && !menuDropdown.classList.contains('hidden')) {
+            if (!menuWrapper || !menuWrapper.contains(e.target)) {
+                menuDropdown.classList.add('hidden');
             }
         }
     });
@@ -735,7 +991,7 @@
                     'X-CSRFToken': csrfToken,
                     'X-Requested-With': 'XMLHttpRequest',
                 },
-                body: JSON.stringify({ raw_text: text })
+                body: JSON.stringify({ text: text, raw_text: text })
             });
 
             if (response.ok) {
@@ -752,63 +1008,18 @@
     }
 
     function renderAllTimestamps(list) {
-        const container = document.getElementById('timestamps-container');
-        const menuWrapper = document.getElementById('chapter-menu-wrapper');
-        container.querySelectorAll('.chapter-pill-item').forEach(el => el.remove());
-
-        list.forEach(ts => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.id = `timestamp-item-${ts.id}`;
-            btn.className = "chapter-pill-item inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-slate-200/90 dark:border-slate-700/80 bg-white dark:bg-slate-850 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-2xs hover:border-indigo-400 dark:hover:border-indigo-600 transition group text-xs font-medium";
-            btn.setAttribute('onclick', `seekToTime(${ts.time_seconds})`);
-            btn.title = `Jump to ${ts.formatted_time} - ${ts.label}`;
-            btn.innerHTML = `
-                <span class="font-mono font-bold text-indigo-600 dark:text-indigo-400">${ts.formatted_time}</span>
-                <span class="truncate max-w-[150px]">${ts.label}</span>
-                ${isOwner ? `
-                <span onclick="event.stopPropagation(); deleteTimestamp(${ts.id});" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 ml-0.5 text-xs transition" title="Delete">&times;</span>
-                ` : ''}
-            `;
-            if (menuWrapper) {
-                container.insertBefore(btn, menuWrapper);
-            } else {
-                container.appendChild(btn);
-            }
-        });
-
-        const placeholder = document.getElementById('no-timestamps-placeholder');
-        if (placeholder) {
-            if (list.length > 0) placeholder.classList.add('hidden');
-            else placeholder.classList.remove('hidden');
-        }
+        chaptersList = Array.isArray(list) ? list : [];
+        chaptersList.sort((a, b) => a.time_seconds - b.time_seconds);
+        currentChapterIndex = 0;
+        updateChapterUI();
     }
 
     function addTimestampToUI(ts) {
-        const placeholder = document.getElementById('no-timestamps-placeholder');
-        if (placeholder) placeholder.classList.add('hidden');
-
-        const container = document.getElementById('timestamps-container');
-        const menuWrapper = document.getElementById('chapter-menu-wrapper');
-
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.id = `timestamp-item-${ts.id}`;
-        btn.className = "chapter-pill-item inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-slate-200/90 dark:border-slate-700/80 bg-white dark:bg-slate-850 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-2xs hover:border-indigo-400 dark:hover:border-indigo-600 transition group text-xs font-medium";
-        btn.setAttribute('onclick', `seekToTime(${ts.time_seconds})`);
-        btn.title = `Jump to ${ts.formatted_time} - ${ts.label}`;
-        btn.innerHTML = `
-            <span class="font-mono font-bold text-indigo-600 dark:text-indigo-400">${ts.formatted_time}</span>
-            <span class="truncate max-w-[150px]">${ts.label}</span>
-            ${isOwner ? `
-            <span onclick="event.stopPropagation(); deleteTimestamp(${ts.id});" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 ml-0.5 text-xs transition" title="Delete">&times;</span>
-            ` : ''}
-        `;
-        if (menuWrapper) {
-            container.insertBefore(btn, menuWrapper);
-        } else {
-            container.appendChild(btn);
-        }
+        chaptersList.push(ts);
+        chaptersList.sort((a, b) => a.time_seconds - b.time_seconds);
+        const newIdx = chaptersList.findIndex(item => item.id === ts.id);
+        currentChapterIndex = newIdx >= 0 ? newIdx : 0;
+        updateChapterUI();
     }
 
     async function deleteTimestamp(tsId) {
@@ -822,8 +1033,11 @@
                 }
             });
             if (response.ok) {
-                const el = document.getElementById(`timestamp-item-${tsId}`);
-                if (el) el.remove();
+                chaptersList = chaptersList.filter(item => item.id !== tsId);
+                if (currentChapterIndex >= chaptersList.length) {
+                    currentChapterIndex = Math.max(0, chaptersList.length - 1);
+                }
+                updateChapterUI();
             }
         } catch (err) {
             console.error(err);
@@ -1055,6 +1269,12 @@
 
     // Initialize Workspace State
     (function initWorkspaceState() {
+        if (typeof chaptersList !== 'undefined') {
+            chaptersList.sort((a, b) => a.time_seconds - b.time_seconds);
+            updateChapterUI();
+            startChapterTracking();
+        }
+
         const savedTab = localStorage.getItem('workspace-active-tab');
         if (savedTab === 'notes') {
             switchRightTab('notes');
