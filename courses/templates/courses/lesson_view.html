@@ -1,0 +1,1093 @@
+{% extends "courses/base.html" %}
+
+{% block title %}{{ lesson.title }} | Study Workspace{% endblock %}
+
+{% block extra_head %}
+<!-- Prevent vertical bounce on full split-screen on desktop -->
+<style>
+    @media (min-width: 1024px) {
+        body {
+            overflow: hidden;
+            height: 100vh;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col flex-1 h-[calc(100vh-4rem)] bg-slate-100 dark:bg-slate-950 overflow-hidden transition-colors">
+    <!-- Top Workspace Sub-Navbar -->
+    <div class="h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 flex items-center justify-between shrink-0 gap-4 transition-colors">
+        <!-- Left: Course / Module Breadcrumb -->
+        <div class="flex items-center gap-2 truncate min-w-0">
+            <a href="{% url 'courses:course_detail' course.pk %}" class="text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition flex items-center gap-1 shrink-0">
+                <span>&larr;</span>
+                <span class="hidden sm:inline">Course:</span>
+                <span class="max-w-[140px] truncate">{{ course.title }}</span>
+            </a>
+            <span class="text-slate-300 dark:text-slate-700">/</span>
+            <span class="text-xs text-slate-500 dark:text-slate-400 truncate hidden md:inline">{{ module.title }}</span>
+            <span class="text-slate-300 dark:text-slate-700 hidden md:inline">/</span>
+            <span class="text-xs font-bold text-slate-900 dark:text-white truncate">{{ lesson.title }}</span>
+        </div>
+
+        <!-- Middle: Previous / Next Navigation -->
+        <div class="hidden sm:flex items-center gap-1.5 shrink-0">
+            {% if prev_lesson %}
+            <a href="{% url 'courses:lesson_view' prev_lesson.pk %}" class="px-2.5 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-transparent dark:border-slate-700 rounded-lg transition" title="{{ prev_lesson.title }}">
+                &larr; Prev
+            </a>
+            {% else %}
+            <span class="px-2.5 py-1.5 text-xs font-semibold text-slate-300 dark:text-slate-600 bg-slate-50 dark:bg-slate-850 rounded-lg cursor-not-allowed">
+                &larr; Prev
+            </span>
+            {% endif %}
+
+            {% if next_lesson %}
+            <a href="{% url 'courses:lesson_view' next_lesson.pk %}" class="px-2.5 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-transparent dark:border-slate-700 rounded-lg transition" title="{{ next_lesson.title }}">
+                Next &rarr;
+            </a>
+            {% else %}
+            <span class="px-2.5 py-1.5 text-xs font-semibold text-slate-300 dark:text-slate-600 bg-slate-50 dark:bg-slate-850 rounded-lg cursor-not-allowed">
+                Next &rarr;
+            </span>
+            {% endif %}
+        </div>
+
+        <!-- Right: Lesson Completion Status Toggle & Sidebar Toggle -->
+        <div class="flex items-center gap-2.5 shrink-0">
+            {% if is_owner %}
+            <button id="toggle-complete-btn" onclick="toggleCompletion()" class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition shadow-xs {% if lesson.is_completed %}bg-emerald-600 text-white hover:bg-emerald-700{% else %}bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700{% endif %}">
+                <span id="complete-icon">{% if lesson.is_completed %}✓{% else %}○{% endif %}</span>
+                <span id="complete-text">{% if lesson.is_completed %}Completed{% else %}Mark as Complete{% endif %}</span>
+            </button>
+            {% else %}
+            <span class="text-xs px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg font-medium border border-slate-200 dark:border-slate-700">
+                Public Student Mode
+            </span>
+            {% endif %}
+
+            <!-- Sidebar Toggle Button (Coursera/Udemy cinema toggle) -->
+            <button 
+                id="toggle-sidebar-btn" 
+                onclick="toggleSidebar()" 
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-750 transition shadow-2xs"
+                title="Toggle Course Content & Notes sidebar">
+                <span id="toggle-sidebar-icon">📑</span>
+                <span id="toggle-sidebar-text" class="hidden sm:inline">Sidebar</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Split-Screen Core Container -->
+    <div class="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+        
+        <!-- ================= LEFT PANEL: STUDY RESOURCE ================= -->
+        <section id="left-study-panel" class="lg:w-[60%] w-full h-full flex flex-col bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-y-auto border-r border-slate-200 dark:border-slate-800 transition-all duration-200">
+            <div class="p-4 sm:p-6 flex-1 flex flex-col justify-start">
+                
+                {% if lesson.lesson_type == 'YOUTUBE' %}
+                    <!-- Dynamic YouTube Video Embed -->
+                    <div class="w-full">
+                        {% if lesson.youtube_embed_url %}
+                        <div class="relative w-full aspect-video rounded-2xl overflow-hidden bg-black shadow-lg border border-slate-200 dark:border-slate-800">
+                            <iframe 
+                                id="youtube-player"
+                                class="absolute inset-0 w-full h-full" 
+                                src="{{ lesson.youtube_embed_url }}?enablejsapi=1&origin={{ request.scheme }}://{{ request.get_host }}&rel=0" 
+                                title="{{ lesson.title }}" 
+                                frameborder="0" 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                referrerpolicy="strict-origin-when-cross-origin"
+                                allowfullscreen>
+                            </iframe>
+                        </div>
+
+                        <!-- Minimalist Chapters & Timestamps Ribbon -->
+                        <div class="mt-3 bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/90 rounded-xl p-2.5 shadow-2xs transition-colors">
+                            <div class="flex items-center justify-between gap-2 mb-2 px-1 text-xs">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-bold text-slate-700 dark:text-slate-300 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                        ⏱️ Chapters
+                                    </span>
+                                    <span id="timestamp-counter" class="text-[10px] px-1.5 py-0.2 bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-mono font-bold rounded border border-slate-200 dark:border-slate-700/80">
+                                        {{ lesson.timestamps.count }}
+                                    </span>
+                                </div>
+
+                                <div class="flex items-center gap-2">
+                                    {% if is_owner %}
+                                    <button type="button" onclick="syncYouTubeChapters()" id="sync-yt-btn" class="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 transition" title="Fetch official chapters directly from YouTube">
+                                        <span>⚡</span>
+                                        <span>Sync from YouTube</span>
+                                    </button>
+                                    <span class="text-slate-300 dark:text-slate-700">•</span>
+                                    <button type="button" onclick="openPasteModal()" class="text-[11px] text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition" title="Paste a list of timestamps from video description">
+                                        📋 Paste List
+                                    </button>
+                                    <span class="text-slate-300 dark:text-slate-700">•</span>
+                                    <button type="button" onclick="openAddTimestampModal()" class="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition">
+                                        <span>+</span>
+                                        <span>Add Custom</span>
+                                    </button>
+                                    <span class="text-slate-300 dark:text-slate-700">•</span>
+                                    {% endif %}
+                                    {% if lesson.youtube_url %}
+                                    <a href="{{ lesson.youtube_url }}" target="_blank" rel="noopener noreferrer" class="text-[11px] text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-slate-300 transition inline-flex items-center gap-0.5">
+                                        YouTube ↗
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- Minimal Horizontally-Scrollable Chapters Container -->
+                            <div id="timestamps-container" class="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 text-xs select-none scroll-smooth">
+                                {% for ts in lesson.timestamps.all %}
+                                <div id="timestamp-item-{{ ts.id }}" class="shrink-0 flex items-center group bg-slate-50 dark:bg-slate-800/90 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700/60 rounded-lg overflow-hidden transition">
+                                    <button type="button" onclick="seekToTime({{ ts.time_seconds }})" class="flex items-center gap-1.5 px-2.5 py-1 text-left" title="Jump to {{ ts.formatted_time }} - {{ ts.label }}">
+                                        <span class="font-mono text-[11px] font-bold text-indigo-600 dark:text-indigo-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">
+                                            {{ ts.formatted_time }}
+                                        </span>
+                                        <span class="text-[11px] text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white max-w-[150px] truncate">
+                                            {{ ts.label }}
+                                        </span>
+                                    </button>
+                                    {% if is_owner %}
+                                    <button type="button" onclick="deleteTimestamp({{ ts.id }})" class="pr-2 pl-0.5 text-slate-400 dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 text-xs opacity-0 group-hover:opacity-100 transition" title="Delete">
+                                        &times;
+                                    </button>
+                                    {% endif %}
+                                </div>
+                                {% empty %}
+                                <div id="no-timestamps-placeholder" class="text-[11px] text-slate-500 dark:text-slate-400 py-1 px-1 flex items-center gap-2">
+                                    <span>No chapters available yet.</span>
+                                    {% if is_owner %}
+                                    <button type="button" onclick="syncYouTubeChapters()" class="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold">
+                                        ⚡ Fetch YouTuber's Chapters
+                                    </button>
+                                    <span>or</span>
+                                    <button type="button" onclick="openAddTimestampModal()" class="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold">
+                                        + Add Custom
+                                    </button>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% else %}
+                        <!-- Fallback if URL is missing or invalid -->
+                        <div class="w-full aspect-video rounded-2xl bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center p-6 text-center">
+                            <span class="text-3xl mb-2">🎬</span>
+                            <p class="font-bold text-slate-900 dark:text-slate-200">Unable to load YouTube video embed</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">
+                                Please check that a valid YouTube URL was provided for this lesson.
+                            </p>
+                            {% if lesson.youtube_url %}
+                            <a href="{{ lesson.youtube_url }}" target="_blank" rel="noopener noreferrer" class="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition">
+                                Open Raw Link in New Tab &rarr;
+                            </a>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                {% elif lesson.lesson_type == 'PDF' %}
+                    <!-- PDF Document Reader -->
+                    <div class="w-full flex-1 flex flex-col min-h-[500px]">
+                        {% if lesson.pdf_file %}
+                        <div class="flex items-center justify-between mb-3 bg-white dark:bg-slate-900 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 transition-colors">
+                            <div class="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                <span>📄</span>
+                                <span class="truncate max-w-[200px]">{{ lesson.pdf_file.name }}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <a href="{{ lesson.pdf_file.url }}" target="_blank" class="px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-lg transition border border-slate-200 dark:border-slate-700">
+                                    Open Fullscreen ↗
+                                </a>
+                                <a href="{{ lesson.pdf_file.url }}" download class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg transition">
+                                    Download PDF
+                                </a>
+                            </div>
+                        </div>
+                        <iframe 
+                            src="{{ lesson.pdf_file.url }}" 
+                            class="w-full flex-1 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white min-h-[550px]"
+                            title="{{ lesson.title }}">
+                        </iframe>
+                        {% else %}
+                        <div class="w-full flex-1 min-h-[400px] rounded-2xl bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center p-6 text-center">
+                            <span class="text-3xl mb-2">📄</span>
+                            <p class="font-bold text-slate-900 dark:text-slate-200">No PDF uploaded for this lesson</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                Edit this lesson to attach lecture slides or reading material.
+                            </p>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                {% elif lesson.lesson_type == 'LINK' %}
+                    <!-- External Web Resource Link -->
+                    <div class="w-full flex-1 flex items-center justify-center p-8">
+                        <div class="max-w-md w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-2xl text-center shadow-lg transition-colors">
+                            <div class="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-500 dark:text-amber-400 mx-auto flex items-center justify-center text-3xl mb-4">
+                                🔗
+                            </div>
+                            <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100">External Web Resource</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                                This lesson connects to an interactive article, external documentation, or interactive tutorial.
+                            </p>
+                            
+                            {% if lesson.external_url %}
+                            <div class="mt-6">
+                                <a href="{{ lesson.external_url }}" target="_blank" rel="noopener noreferrer" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition shadow-lg shadow-indigo-500/20">
+                                    <span>Read External Article</span>
+                                    <span>↗</span>
+                                </a>
+                                <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-2 truncate">
+                                    {{ lesson.external_url }}
+                                </p>
+                            </div>
+                            {% else %}
+                            <p class="text-xs text-rose-500 dark:text-rose-400 mt-4">No external URL provided yet.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+
+                <!-- Resource Metadata & Description -->
+                <div class="mt-6 pt-5 border-t border-slate-200 dark:border-slate-800/80 transition-colors">
+                    <div class="flex items-center gap-2 mb-1.5">
+                        <span class="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                            {{ lesson.get_lesson_type_display }}
+                        </span>
+                        <span class="text-slate-300 dark:text-slate-700">•</span>
+                        <span class="text-xs text-slate-500 dark:text-slate-400">{{ module.title }}</span>
+                    </div>
+                    <h2 class="text-lg font-bold text-slate-900 dark:text-white tracking-tight">{{ lesson.title }}</h2>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= RIGHT PANEL (40%): COURSERA / UDEMY COURSE CONTENT & NOTES ================= -->
+        <section id="right-workspace-sidebar" class="lg:w-[40%] w-full h-full flex flex-col bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 overflow-hidden transition-all duration-200">
+            <!-- Top Mode Tabs (Udemy / Coursera Style) -->
+            <div class="px-3 pt-2 bg-slate-50 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 transition-colors">
+                <div class="flex items-center space-x-1">
+                    <!-- Tab 1: Course Content -->
+                    <button 
+                        id="tab-btn-content" 
+                        type="button"
+                        onclick="switchRightTab('content')" 
+                        class="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-t-lg transition border-b-2 text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400 bg-white dark:bg-slate-900 shadow-2xs">
+                        <span>📚 Course Content</span>
+                        <span id="tab-content-badge" class="px-1.5 py-0.2 text-[10px] rounded-full bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-300 font-mono font-bold">
+                            {{ course.completed_lessons_count }}/{{ course.total_lessons_count }}
+                        </span>
+                    </button>
+
+                    <!-- Tab 2: Study Notes -->
+                    <button 
+                        id="tab-btn-notes" 
+                        type="button"
+                        onclick="switchRightTab('notes')" 
+                        class="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-t-lg transition border-b-2 text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-800 dark:hover:text-slate-200">
+                        <span>✍️ Study Notes</span>
+                        <span id="tab-notes-save-dot" class="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Notes in sync"></span>
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-1 pb-1">
+                    <button 
+                        type="button" 
+                        onclick="toggleSidebar()" 
+                        class="p-1 rounded-md text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 text-xs transition"
+                        title="Collapse sidebar (Cinema Mode)">
+                        ✕
+                    </button>
+                </div>
+            </div>
+
+            <!-- ================= VIEW 1: COURSE CONTENT (UDEMY / COURSERA ACCORDION STYLE) ================= -->
+            <div id="view-course-content" class="flex-1 flex flex-col overflow-y-auto">
+                <!-- Course Overall Progress Header -->
+                <div class="p-4 bg-slate-50/70 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800">
+                    <div class="flex items-center justify-between text-xs mb-1.5">
+                        <span class="font-bold text-slate-800 dark:text-slate-200">Course Completion</span>
+                        <span id="sidebar-progress-text" class="font-mono text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                            {{ course.completed_lessons_count }} / {{ course.total_lessons_count }} ({{ course.progress_percentage }}%)
+                        </span>
+                    </div>
+                    <div class="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                        <div id="sidebar-progress-bar" class="bg-indigo-600 dark:bg-indigo-500 h-2 rounded-full transition-all duration-300" style="width: {{ course.progress_percentage }}%;"></div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between mt-3 pt-2 border-t border-slate-200/60 dark:border-slate-800/60 text-[11px] text-slate-500 dark:text-slate-400">
+                        <span>{{ course_modules.count }} Section{{ course_modules.count|pluralize }}</span>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="expandAllModules()" class="hover:text-indigo-600 dark:hover:text-indigo-400 font-semibold transition">Expand All</button>
+                            <span>•</span>
+                            <button type="button" onclick="collapseAllModules()" class="hover:text-indigo-600 dark:hover:text-indigo-400 font-semibold transition">Collapse All</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modules & Lessons Accordion List -->
+                <div class="flex-1 divide-y divide-slate-200 dark:divide-slate-800 overflow-y-auto">
+                    {% for mod in course_modules %}
+                    <div class="module-accordion-group" id="module-accordion-{{ mod.pk }}" data-module-id="{{ mod.pk }}">
+                        <!-- Accordion Section Header (Clickable toggle) -->
+                        <button 
+                            type="button" 
+                            onclick="toggleModuleAccordion({{ mod.pk }})" 
+                            class="w-full px-4 py-3 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-850 flex items-center justify-between text-left transition select-none group border-b border-slate-100 dark:border-slate-800/60">
+                            <div class="flex-1 pr-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 font-mono">
+                                        Section {{ forloop.counter }}
+                                    </span>
+                                    {% if mod.pk == module.pk %}
+                                    <span class="text-[9px] px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-300 font-semibold">
+                                        Current
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                <h4 class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition mt-0.5">
+                                    {{ mod.title }}
+                                </h4>
+                                <span class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 block">
+                                    <span id="mod-completed-{{ mod.pk }}">{{ mod.completed_lessons_count }}</span> / {{ mod.total_lessons_count }} completed
+                                </span>
+                            </div>
+                            <div class="shrink-0 flex items-center">
+                                <span id="module-chevron-{{ mod.pk }}" class="text-slate-400 dark:text-slate-500 transform transition-transform duration-200 text-xs {% if mod.pk == module.pk %}rotate-180{% endif %}">
+                                    ▼
+                                </span>
+                            </div>
+                        </button>
+
+                        <!-- Accordion Lessons List Body -->
+                        <div 
+                            id="module-lessons-{{ mod.pk }}" 
+                            class="module-lessons-container bg-slate-50/50 dark:bg-slate-950/40 divide-y divide-slate-100 dark:divide-slate-850/80 transition-all {% if mod.pk != module.pk %}hidden{% endif %}">
+                            {% for l in mod.lessons.all %}
+                            <div class="flex items-center justify-between px-4 py-2.5 text-xs transition group {% if l.pk == lesson.pk %}bg-indigo-50/90 dark:bg-slate-800 border-l-4 border-indigo-600 dark:border-indigo-400 font-semibold{% else %}hover:bg-slate-100/70 dark:hover:bg-slate-800/60 border-l-4 border-transparent{% endif %}">
+                                <!-- Completion Checkbox & Title -->
+                                <div class="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
+                                    {% if is_owner %}
+                                    <button 
+                                        type="button" 
+                                        onclick="toggleSidebarLessonCompletion(event, {{ l.pk }})" 
+                                        id="sidebar-chk-{{ l.pk }}" 
+                                        class="shrink-0 w-4 h-4 rounded-full flex items-center justify-center transition {% if l.is_completed %}bg-emerald-600 text-white{% else %}border border-slate-300 dark:border-slate-600 text-transparent hover:border-indigo-500{% endif %}"
+                                        title="{% if l.is_completed %}Mark incomplete{% else %}Mark complete{% endif %}">
+                                        <span class="text-[9px] font-bold">✓</span>
+                                    </button>
+                                    {% else %}
+                                    <span class="shrink-0 w-4 h-4 rounded-full flex items-center justify-center {% if l.is_completed %}bg-emerald-600 text-white{% else %}border border-slate-300 dark:border-slate-600{% endif %}">
+                                        {% if l.is_completed %}<span class="text-[9px] font-bold">✓</span>{% endif %}
+                                    </span>
+                                    {% endif %}
+
+                                    <!-- Lesson Type Icon -->
+                                    <span class="shrink-0 text-xs">
+                                        {% if l.lesson_type == 'YOUTUBE' %}▶{% elif l.lesson_type == 'PDF' %}📄{% else %}🔗{% endif %}
+                                    </span>
+
+                                    <!-- Clickable Link to Lesson -->
+                                    <a 
+                                        href="{% url 'courses:lesson_view' l.pk %}" 
+                                        class="truncate flex-1 {% if l.pk == lesson.pk %}font-bold text-indigo-700 dark:text-indigo-300{% else %}text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white{% endif %}"
+                                        title="{{ l.title }}">
+                                        {{ l.title }}
+                                    </a>
+                                </div>
+
+                                <!-- Right Tag: Active Indicator or Type -->
+                                <div class="shrink-0 flex items-center gap-1.5">
+                                    {% if l.pk == lesson.pk %}
+                                    <span class="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-950/80 px-2 py-0.5 rounded-full">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400 animate-pulse"></span>
+                                        <span>Active</span>
+                                    </span>
+                                    {% else %}
+                                    <span class="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-mono">
+                                        {{ l.lesson_type }}
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% empty %}
+                            <div class="p-3 text-center text-[11px] text-slate-400 italic">No lessons in this section yet.</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="p-6 text-center text-xs text-slate-400">No modules in this course.</div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- ================= VIEW 2: STUDY NOTES ================= -->
+            <div id="view-study-notes" class="flex-1 flex flex-col hidden overflow-hidden">
+                <!-- Notes Toolbar -->
+                <div class="px-5 py-3 bg-slate-50 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 transition-colors">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">✍️ Study Notes</span>
+                        <span id="save-status" class="text-[11px] text-slate-400 dark:text-slate-500">All changes saved</span>
+                    </div>
+
+                    {% if is_owner %}
+                    <div class="flex items-center gap-2">
+                        {% if lesson.lesson_type == 'YOUTUBE' %}
+                        <button 
+                            type="button" 
+                            onclick="insertCurrentTimestamp()" 
+                            class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750 transition shadow-2xs"
+                            title="Insert current video timestamp into notes">
+                            <span>⏱️ Stamp</span>
+                        </button>
+                        {% endif %}
+                        <button 
+                            id="save-notes-btn" 
+                            onclick="saveNotes()" 
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition shadow-2xs">
+                            <span>💾 Save Study Notes</span>
+                        </button>
+                    </div>
+                    {% else %}
+                    <span class="text-[11px] text-slate-400 dark:text-slate-500 italic">Read-only view</span>
+                    {% endif %}
+                </div>
+
+                <!-- Focus-Mode Notes Textarea -->
+                <div class="flex-1 flex flex-col p-4 bg-white dark:bg-slate-900 overflow-hidden transition-colors">
+                    <textarea 
+                        id="notes-textarea" 
+                        {% if not is_owner %}readonly{% endif %}
+                        placeholder="Take real-time notes while watching the lecture or reading the slides... (Markdown supported)"
+                        class="w-full flex-1 p-3 text-slate-800 dark:text-slate-100 bg-slate-50/50 dark:bg-slate-950/60 hover:bg-slate-50 dark:hover:bg-slate-950/80 focus:bg-white dark:focus:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none font-mono text-sm leading-relaxed outline-none transition">{{ lesson.notes }}</textarea>
+                </div>
+
+                <!-- Notes Footer Bar -->
+                <div class="px-5 py-2.5 bg-slate-50 dark:bg-slate-850 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-500 shrink-0 transition-colors">
+                    <span class="hidden sm:inline">Tip: Press <kbd class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded font-mono text-[10px]">Ctrl+S</kbd> to save anytime</span>
+                    <span id="char-counter">{{ lesson.notes|length }} characters</span>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+<!-- Modal: Add Custom Video Timestamp -->
+{% if is_owner %}
+<div id="add-timestamp-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs hidden p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-sm w-full overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <span>⏱️</span>
+                <span>Add Custom Timestamp</span>
+            </h3>
+            <button onclick="closeAddTimestampModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg font-bold leading-none">&times;</button>
+        </div>
+        <form id="add-timestamp-form" onsubmit="submitTimestamp(event)">
+            <div class="p-5 space-y-3">
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Time (MM:SS)</label>
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="ts-time-input" required placeholder="01:30" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 font-mono shadow-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                        <button type="button" onclick="captureCurrentPlayerTime()" class="px-2.5 py-1.5 text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg shrink-0" title="Capture current video playback time">
+                            Capture
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Topic Label</label>
+                    <input type="text" id="ts-label-input" required placeholder="e.g. Variable Declarations" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 shadow-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                </div>
+            </div>
+            <div class="px-5 py-3 bg-slate-50 dark:bg-slate-850 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+                <button type="button" onclick="closeAddTimestampModal()" class="px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg">Cancel</button>
+                <button type="submit" class="px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs">Add</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Paste Timestamps List -->
+<div id="paste-timestamps-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs hidden p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-md w-full overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <span>📋</span>
+                <span>Paste YouTuber's Timestamps</span>
+            </h3>
+            <button onclick="closePasteModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg font-bold leading-none">&times;</button>
+        </div>
+        <form onsubmit="submitPasteTimestamps(event)">
+            <div class="p-5">
+                <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                    Copy and paste the chapters or timestamps from the YouTube description:
+                </p>
+                <textarea id="paste-timestamps-textarea" rows="6" placeholder="00:00 Intro&#10;01:39 Variables&#10;02:28 Data Types" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-xs font-mono text-slate-800 dark:text-slate-100 shadow-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 leading-relaxed"></textarea>
+            </div>
+            <div class="px-5 py-3 bg-slate-50 dark:bg-slate-850 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+                <button type="button" onclick="closePasteModal()" class="px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg">Cancel</button>
+                <button type="submit" class="px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs">Import All</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const lessonId = "{{ lesson.pk }}";
+    const saveNotesUrl = "{% url 'courses:lesson_save_notes' lesson.pk %}";
+    const toggleCompleteUrl = "{% url 'courses:lesson_toggle_complete' lesson.pk %}";
+    const addTimestampUrl = "{% url 'courses:lesson_add_timestamp' lesson.pk %}";
+    const syncChaptersUrl = "{% url 'courses:lesson_sync_youtube_chapters' lesson.pk %}";
+    const pasteTimestampsUrl = "{% url 'courses:lesson_paste_timestamps' lesson.pk %}";
+    const csrfToken = "{{ csrf_token }}";
+    const isOwner = {{ is_owner|yesno:"true,false" }};
+
+    const textarea = document.getElementById('notes-textarea');
+    const saveStatus = document.getElementById('save-status');
+    const charCounter = document.getElementById('char-counter');
+
+    let isDirty = false;
+
+    // YouTube Iframe API Bridge
+    let ytPlayer = null;
+    let ytReady = false;
+
+    (function loadYouTubeApi() {
+        if (window.YT && window.YT.Player) {
+            onYouTubeIframeAPIReady();
+            return;
+        }
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    })();
+
+    window.onYouTubeIframeAPIReady = function() {
+        const iframe = document.getElementById('youtube-player');
+        if (iframe) {
+            ytPlayer = new YT.Player('youtube-player', {
+                events: {
+                    'onReady': () => { ytReady = true; }
+                }
+            });
+        }
+    };
+
+    // Seek to given timestamp
+    function seekToTime(seconds) {
+        if (ytPlayer && ytReady && typeof ytPlayer.seekTo === 'function') {
+            ytPlayer.seekTo(seconds, true);
+            ytPlayer.playVideo();
+        } else {
+            const iframe = document.getElementById('youtube-player');
+            if (iframe && iframe.contentWindow) {
+                iframe.contentWindow.postMessage(JSON.stringify({
+                    event: 'command',
+                    func: 'seekTo',
+                    args: [seconds, true]
+                }), '*');
+                iframe.contentWindow.postMessage(JSON.stringify({
+                    event: 'command',
+                    func: 'playVideo',
+                    args: []
+                }), '*');
+            }
+        }
+    }
+
+    // Helper: get current time in seconds
+    function getCurrentVideoSeconds() {
+        if (ytPlayer && typeof ytPlayer.getCurrentTime === 'function') {
+            return Math.floor(ytPlayer.getCurrentTime());
+        }
+        return 0;
+    }
+
+    function formatSeconds(totalSecs) {
+        const mins = Math.floor(totalSecs / 60);
+        const secs = totalSecs % 60;
+        return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    // Insert current timestamp into notes
+    function insertCurrentTimestamp() {
+        if (!isOwner) return;
+        switchRightTab('notes');
+        if (!textarea) return;
+        const currentSecs = getCurrentVideoSeconds();
+        const timeStr = formatSeconds(currentSecs);
+        const stampText = `[${timeStr}] `;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+
+        textarea.value = text.substring(0, start) + stampText + text.substring(end);
+        textarea.selectionStart = textarea.selectionEnd = start + stampText.length;
+        textarea.focus();
+        textarea.dispatchEvent(new Event('input'));
+    }
+
+    // Custom Timestamp Modal
+    function openAddTimestampModal() {
+        const modal = document.getElementById('add-timestamp-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            captureCurrentPlayerTime();
+            document.getElementById('ts-label-input').focus();
+        }
+    }
+
+    function closeAddTimestampModal() {
+        const modal = document.getElementById('add-timestamp-modal');
+        if (modal) modal.classList.add('hidden');
+    }
+
+    function captureCurrentPlayerTime() {
+        const secs = getCurrentVideoSeconds();
+        document.getElementById('ts-time-input').value = formatSeconds(secs);
+    }
+
+    // Paste Modal
+    function openPasteModal() {
+        const modal = document.getElementById('paste-timestamps-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            document.getElementById('paste-timestamps-textarea').focus();
+        }
+    }
+
+    function closePasteModal() {
+        const modal = document.getElementById('paste-timestamps-modal');
+        if (modal) modal.classList.add('hidden');
+    }
+
+    // Submit single custom timestamp
+    async function submitTimestamp(e) {
+        e.preventDefault();
+        const timeVal = document.getElementById('ts-time-input').value;
+        const labelVal = document.getElementById('ts-label-input').value;
+
+        try {
+            const response = await fetch(addTimestampUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({ time: timeVal, label: labelVal })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                closeAddTimestampModal();
+                document.getElementById('add-timestamp-form').reset();
+                addTimestampToUI(data);
+            } else {
+                alert('Failed to add timestamp.');
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    // Sync official chapters from YouTube
+    async function syncYouTubeChapters() {
+        const btn = document.getElementById('sync-yt-btn');
+        const origText = btn ? btn.innerHTML : '';
+        if (btn) btn.innerHTML = `<span>⏳</span><span>Syncing...</span>`;
+
+        try {
+            const response = await fetch(syncChaptersUrl, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.timestamps && data.timestamps.length > 0) {
+                    renderAllTimestamps(data.timestamps);
+                } else {
+                    alert('No official chapters found on this YouTube video. You can add them with "+ Add Custom" or "📋 Paste List".');
+                }
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            if (btn) btn.innerHTML = origText;
+        }
+    }
+
+    // Submit pasted timestamp text
+    async function submitPasteTimestamps(e) {
+        e.preventDefault();
+        const textVal = document.getElementById('paste-timestamps-textarea').value;
+        if (!textVal.trim()) return;
+
+        try {
+            const response = await fetch(pasteTimestampsUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({ text: textVal })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                closePasteModal();
+                document.getElementById('paste-timestamps-textarea').value = '';
+                if (data.timestamps) {
+                    renderAllTimestamps(data.timestamps);
+                }
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    function renderAllTimestamps(list) {
+        const container = document.getElementById('timestamps-container');
+        const countBadge = document.getElementById('timestamp-counter');
+        container.innerHTML = '';
+
+        list.forEach(ts => {
+            const div = document.createElement('div');
+            div.id = `timestamp-item-${ts.id}`;
+            div.className = "shrink-0 flex items-center group bg-slate-50 dark:bg-slate-800/90 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700/60 rounded-lg overflow-hidden transition";
+            div.innerHTML = `
+                <button type="button" onclick="seekToTime(${ts.time_seconds})" class="flex items-center gap-1.5 px-2.5 py-1 text-left" title="Jump to ${ts.formatted_time} - ${ts.label}">
+                    <span class="font-mono text-[11px] font-bold text-indigo-600 dark:text-indigo-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">
+                        ${ts.formatted_time}
+                    </span>
+                    <span class="text-[11px] text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white max-w-[150px] truncate">
+                        ${ts.label}
+                    </span>
+                </button>
+                ${isOwner ? `
+                <button type="button" onclick="deleteTimestamp(${ts.id})" class="pr-2 pl-0.5 text-slate-400 dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 text-xs opacity-0 group-hover:opacity-100 transition" title="Delete">
+                    &times;
+                </button>` : ''}
+            `;
+            container.appendChild(div);
+        });
+
+        if (countBadge) {
+            countBadge.textContent = list.length;
+        }
+    }
+
+    function addTimestampToUI(ts) {
+        const placeholder = document.getElementById('no-timestamps-placeholder');
+        if (placeholder) placeholder.remove();
+
+        const container = document.getElementById('timestamps-container');
+        const countBadge = document.getElementById('timestamp-counter');
+
+        const div = document.createElement('div');
+        div.id = `timestamp-item-${ts.id}`;
+        div.className = "shrink-0 flex items-center group bg-slate-50 dark:bg-slate-800/90 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700/60 rounded-lg overflow-hidden transition";
+        div.innerHTML = `
+            <button type="button" onclick="seekToTime(${ts.time_seconds})" class="flex items-center gap-1.5 px-2.5 py-1 text-left" title="Jump to ${ts.formatted_time} - ${ts.label}">
+                <span class="font-mono text-[11px] font-bold text-indigo-600 dark:text-indigo-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">
+                    ${ts.formatted_time}
+                </span>
+                <span class="text-[11px] text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white max-w-[150px] truncate">
+                    ${ts.label}
+                </span>
+            </button>
+            ${isOwner ? `
+            <button type="button" onclick="deleteTimestamp(${ts.id})" class="pr-2 pl-0.5 text-slate-400 dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 text-xs opacity-0 group-hover:opacity-100 transition" title="Delete">
+                &times;
+            </button>` : ''}
+        `;
+        container.appendChild(div);
+
+        if (countBadge) {
+            countBadge.textContent = container.children.length;
+        }
+    }
+
+    async function deleteTimestamp(tsId) {
+        if (!confirm('Remove this timestamp?')) return;
+        try {
+            const response = await fetch(`/timestamp/${tsId}/delete/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            });
+
+            if (response.ok) {
+                const item = document.getElementById(`timestamp-item-${tsId}`);
+                if (item) item.remove();
+                const container = document.getElementById('timestamps-container');
+                const countBadge = document.getElementById('timestamp-counter');
+                if (countBadge && container) {
+                    countBadge.textContent = container.children.length;
+                }
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    if (textarea && isOwner) {
+        textarea.addEventListener('input', () => {
+            isDirty = true;
+            saveStatus.textContent = 'Unsaved changes...';
+            saveStatus.className = 'text-[11px] text-amber-600 font-semibold';
+            charCounter.textContent = `${textarea.value.length} characters`;
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                saveNotes();
+            }
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 't' || e.key === 'T')) {
+                e.preventDefault();
+                insertCurrentTimestamp();
+            }
+        });
+    }
+
+    async function saveNotes() {
+        if (!isOwner || !textarea) return;
+        saveStatus.textContent = 'Saving...';
+        saveStatus.className = 'text-[11px] text-indigo-600 font-semibold';
+
+        try {
+            const response = await fetch(saveNotesUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({ notes: textarea.value })
+            });
+
+            if (response.ok) {
+                isDirty = false;
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                saveStatus.textContent = `Saved at ${timeStr}`;
+                saveStatus.className = 'text-[11px] text-emerald-600 font-semibold';
+            } else {
+                saveStatus.textContent = 'Failed to save notes';
+                saveStatus.className = 'text-[11px] text-rose-600 font-semibold';
+            }
+        } catch (err) {
+            console.error(err);
+            saveStatus.textContent = 'Network error while saving';
+            saveStatus.className = 'text-[11px] text-rose-600 font-semibold';
+        }
+    }
+
+    async function toggleCompletion() {
+        if (!isOwner) return;
+        try {
+            const response = await fetch(toggleCompleteUrl, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                updateLessonCompletionUI(lessonId, data);
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    // Toggle completion for any lesson from sidebar (Coursera / Udemy style)
+    async function toggleSidebarLessonCompletion(event, targetLessonId) {
+        if (event) {
+            event.stopPropagation();
+            event.preventDefault();
+        }
+        if (!isOwner) return;
+
+        try {
+            const response = await fetch(`/lesson/${targetLessonId}/toggle-complete/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                updateLessonCompletionUI(targetLessonId, data);
+            }
+        } catch (err) {
+            console.error('Error toggling sidebar lesson completion:', err);
+        }
+    }
+
+    function updateLessonCompletionUI(targetLessonId, data) {
+        // 1. Update the sidebar checkmark button
+        const btn = document.getElementById(`sidebar-chk-${targetLessonId}`);
+        if (btn) {
+            if (data.is_completed) {
+                btn.className = "shrink-0 w-4 h-4 rounded-full flex items-center justify-center transition bg-emerald-600 text-white";
+                btn.innerHTML = '<span class="text-[9px] font-bold">✓</span>';
+                btn.title = "Mark incomplete";
+            } else {
+                btn.className = "shrink-0 w-4 h-4 rounded-full flex items-center justify-center transition border border-slate-300 dark:border-slate-600 text-transparent hover:border-indigo-500";
+                btn.innerHTML = '<span class="text-[9px] font-bold">✓</span>';
+                btn.title = "Mark complete";
+            }
+        }
+
+        // 2. If it's the current lesson, update top bar complete button
+        if (String(targetLessonId) === String(lessonId)) {
+            const topBtn = document.getElementById('toggle-complete-btn');
+            const topIcon = document.getElementById('complete-icon');
+            const topText = document.getElementById('complete-text');
+            if (topBtn) {
+                if (data.is_completed) {
+                    topBtn.className = "inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition shadow-xs bg-emerald-600 text-white hover:bg-emerald-700";
+                    if (topIcon) topIcon.textContent = "✓";
+                    if (topText) topText.textContent = "Completed";
+                } else {
+                    topBtn.className = "inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition shadow-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700";
+                    if (topIcon) topIcon.textContent = "○";
+                    if (topText) topText.textContent = "Mark as Complete";
+                }
+            }
+        }
+
+        // 3. Update course progress bar, text and tab badge
+        const bar = document.getElementById('sidebar-progress-bar');
+        const txt = document.getElementById('sidebar-progress-text');
+        const badge = document.getElementById('tab-content-badge');
+        if (bar && data.progress_percentage !== undefined) bar.style.width = `${data.progress_percentage}%`;
+        if (txt && data.completed_lessons !== undefined) {
+            txt.textContent = `${data.completed_lessons} / ${data.total_lessons} (${data.progress_percentage}%)`;
+        }
+        if (badge && data.completed_lessons !== undefined) {
+            badge.textContent = `${data.completed_lessons}/${data.total_lessons}`;
+        }
+    }
+
+    // Switch between Course Content & Notes tabs
+    function switchRightTab(tabName) {
+        const contentTab = document.getElementById('view-course-content');
+        const notesTab = document.getElementById('view-study-notes');
+        const btnContent = document.getElementById('tab-btn-content');
+        const btnNotes = document.getElementById('tab-btn-notes');
+
+        if (tabName === 'notes') {
+            if (contentTab) contentTab.classList.add('hidden');
+            if (notesTab) notesTab.classList.remove('hidden');
+
+            if (btnNotes) btnNotes.className = "flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-t-lg transition border-b-2 text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400 bg-white dark:bg-slate-900 shadow-2xs";
+            if (btnContent) btnContent.className = "flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-t-lg transition border-b-2 text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-800 dark:hover:text-slate-200";
+            localStorage.setItem('workspace-active-tab', 'notes');
+        } else {
+            if (notesTab) notesTab.classList.add('hidden');
+            if (contentTab) contentTab.classList.remove('hidden');
+
+            if (btnContent) btnContent.className = "flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-t-lg transition border-b-2 text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400 bg-white dark:bg-slate-900 shadow-2xs";
+            if (btnNotes) btnNotes.className = "flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-t-lg transition border-b-2 text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-800 dark:hover:text-slate-200";
+            localStorage.setItem('workspace-active-tab', 'content');
+        }
+    }
+
+    // Toggle entire Right Sidebar (Cinema Mode vs Split Mode)
+    function toggleSidebar() {
+        const sidebar = document.getElementById('right-workspace-sidebar');
+        const leftPanel = document.getElementById('left-study-panel');
+        const toggleBtnText = document.getElementById('toggle-sidebar-text');
+        if (!sidebar || !leftPanel) return;
+
+        const isHidden = sidebar.classList.contains('hidden');
+        if (isHidden) {
+            sidebar.classList.remove('hidden');
+            leftPanel.classList.remove('lg:w-full');
+            leftPanel.classList.add('lg:w-[60%]');
+            if (toggleBtnText) toggleBtnText.textContent = "Sidebar";
+            localStorage.setItem('workspace-sidebar-hidden', 'false');
+        } else {
+            sidebar.classList.add('hidden');
+            leftPanel.classList.remove('lg:w-[60%]');
+            leftPanel.classList.add('lg:w-full');
+            if (toggleBtnText) toggleBtnText.textContent = "Show Sidebar";
+            localStorage.setItem('workspace-sidebar-hidden', 'true');
+        }
+    }
+
+    // Module Accordion Expand / Collapse (Udemy / Coursera style)
+    function toggleModuleAccordion(modId) {
+        const container = document.getElementById(`module-lessons-${modId}`);
+        const chevron = document.getElementById(`module-chevron-${modId}`);
+        if (!container) return;
+
+        if (container.classList.contains('hidden')) {
+            container.classList.remove('hidden');
+            if (chevron) chevron.classList.add('rotate-180');
+        } else {
+            container.classList.add('hidden');
+            if (chevron) chevron.classList.remove('rotate-180');
+        }
+    }
+
+    function expandAllModules() {
+        document.querySelectorAll('.module-lessons-container').forEach(el => el.classList.remove('hidden'));
+        document.querySelectorAll('[id^="module-chevron-"]').forEach(ch => ch.classList.add('rotate-180'));
+    }
+
+    function collapseAllModules() {
+        document.querySelectorAll('.module-lessons-container').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('[id^="module-chevron-"]').forEach(ch => ch.classList.remove('rotate-180'));
+    }
+
+    // Initialize Workspace State (Tab and Sidebar visibility)
+    (function initWorkspaceState() {
+        const savedTab = localStorage.getItem('workspace-active-tab');
+        if (savedTab === 'notes') {
+            switchRightTab('notes');
+        } else {
+            switchRightTab('content');
+        }
+
+        if (localStorage.getItem('workspace-sidebar-hidden') === 'true') {
+            const sidebar = document.getElementById('right-workspace-sidebar');
+            const leftPanel = document.getElementById('left-study-panel');
+            const toggleBtnText = document.getElementById('toggle-sidebar-text');
+            if (sidebar && leftPanel) {
+                sidebar.classList.add('hidden');
+                leftPanel.classList.remove('lg:w-[60%]');
+                leftPanel.classList.add('lg:w-full');
+                if (toggleBtnText) toggleBtnText.textContent = "Show Sidebar";
+            }
+        }
+    })();
+</script>
+{% endblock %}
+

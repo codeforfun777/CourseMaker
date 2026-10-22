@@ -1,0 +1,336 @@
+{% extends "courses/base.html" %}
+
+{% block title %}{{ course.title }} | Course Structure{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex-1">
+    <!-- Breadcrumb & Top Bar -->
+    <div class="flex items-center justify-between gap-4 mb-6">
+        <a href="{% if is_owner %}{% url 'courses:dashboard' %}{% else %}{% url 'courses:campus_feed' %}{% endif %}" class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition">
+            &larr; Back to {% if is_owner %}Dashboard{% else %}Campus Feed{% endif %}
+        </a>
+
+        {% if is_owner %}
+        <div class="flex items-center gap-2">
+            <!-- Toggle Public / Private Button -->
+            <form method="post" action="{% url 'courses:course_toggle_public' course.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition {% if course.is_public %}bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/80 hover:bg-emerald-100 dark:hover:bg-emerald-900/60{% else %}bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-750{% endif %}">
+                    {% if course.is_public %}
+                        <span>🌐 Public (Click to make Private)</span>
+                    {% else %}
+                        <span>🔒 Private (Click to Publish)</span>
+                    {% endif %}
+                </button>
+            </form>
+
+            <!-- Delete Course Button -->
+            <form method="post" action="{% url 'courses:course_delete' course.pk %}" onsubmit="return confirm('Are you sure you want to delete this entire course?');">
+                {% csrf_token %}
+                <button type="submit" class="px-3 py-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-900/60 transition">
+                    Delete Course
+                </button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Course Header Card -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 shadow-2xs mb-8 transition-colors">
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+            <div class="max-w-3xl">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Course Track</span>
+                    <span class="text-slate-300 dark:text-slate-700">•</span>
+                    <span class="text-xs text-slate-400 dark:text-slate-500">Created by {{ course.user.username }}</span>
+                </div>
+                <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                    {{ course.title }}
+                </h1>
+                <p class="mt-2 text-sm sm:text-base text-slate-600 dark:text-slate-400 leading-relaxed">
+                    {{ course.description|default:"No description provided." }}
+                </p>
+            </div>
+
+            <div class="lg:w-72 bg-slate-50 dark:bg-slate-850 p-5 rounded-xl border border-slate-100 dark:border-slate-800 flex flex-col justify-between shrink-0 transition-colors">
+                <div>
+                    <div class="flex justify-between items-center text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
+                        <span>Overall Progress</span>
+                        <span class="text-slate-900 dark:text-white font-bold">{{ course.progress_percentage }}%</span>
+                    </div>
+                    <div class="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                        <div class="bg-indigo-600 h-2 rounded-full transition-all duration-300" style="width: {{ course.progress_percentage }}%;"></div>
+                    </div>
+                    <p class="text-[11px] text-slate-400 mt-1">
+                        {{ course.completed_lessons_count }} of {{ course.total_lessons_count }} lessons completed
+                    </p>
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800">
+                    {% with first_lesson=course.get_first_lesson %}
+                        {% if first_lesson %}
+                        <a href="{% url 'courses:lesson_view' first_lesson.pk %}" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-2xs">
+                            <span>🚀 Open Study Mode</span>
+                        </a>
+                        {% else %}
+                        <span class="text-xs text-slate-400 dark:text-slate-500 block text-center">Add lessons to begin studying</span>
+                        {% endif %}
+                    {% endwith %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modules & Curriculum Structure -->
+    <div class="flex items-center justify-between mb-4">
+        <div>
+            <h2 class="text-xl font-bold text-slate-900 dark:text-white">Curriculum Modules</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Organize your modules and multi-media lessons.</p>
+        </div>
+
+        {% if is_owner %}
+        <button onclick="openModal('add-module-modal')" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-700 text-white text-xs font-semibold transition shadow-2xs">
+            <span>+</span>
+            <span>Add Module</span>
+        </button>
+        {% endif %}
+    </div>
+
+    {% if modules %}
+    <div class="space-y-6">
+        {% for module in modules %}
+        <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-2xs transition-colors">
+            <!-- Module Header Bar -->
+            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-850/80 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <span class="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-400 font-bold text-xs flex items-center justify-center border border-indigo-200/50 dark:border-indigo-800/50">
+                        {{ forloop.counter }}
+                    </span>
+                    <h3 class="font-bold text-slate-900 dark:text-white text-base">
+                        {{ module.title }}
+                    </h3>
+                    <span class="text-xs text-slate-400 dark:text-slate-500 font-medium">
+                        ({{ module.lessons.count }} lessons)
+                    </span>
+                </div>
+
+                {% if is_owner %}
+                <div class="flex items-center gap-2">
+                    <button onclick="openAddLessonModal('{{ module.pk }}', '{{ module.title|escapejs }}')" class="px-3 py-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-lg transition border border-indigo-200/50 dark:border-indigo-800/40">
+                        + Add Lesson
+                    </button>
+                    <form method="post" action="{% url 'courses:module_delete' module.pk %}" onsubmit="return confirm('Delete this module and all its lessons?');">
+                        {% csrf_token %}
+                        <button type="submit" class="text-xs text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1.5 transition">
+                            ✕
+                        </button>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Lessons List Inside Module -->
+            <div class="divide-y divide-slate-100 dark:divide-slate-800/80">
+                {% if module.lessons.all %}
+                    {% for lesson in module.lessons.all %}
+                    <div class="px-6 py-3.5 flex items-center justify-between hover:bg-slate-50/70 dark:hover:bg-slate-850/60 transition group">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <!-- Completion indicator -->
+                            {% if lesson.is_completed %}
+                            <span class="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xs font-bold shrink-0 border border-emerald-200 dark:border-emerald-800" title="Completed">
+                                ✓
+                            </span>
+                            {% else %}
+                            <span class="w-5 h-5 rounded-full border border-slate-300 dark:border-slate-700 shrink-0" title="Not completed"></span>
+                            {% endif %}
+
+                            <!-- Lesson Type Badge -->
+                            {% if lesson.lesson_type == 'YOUTUBE' %}
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-900/60 shrink-0">
+                                🎬 Video
+                            </span>
+                            {% elif lesson.lesson_type == 'PDF' %}
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-900/60 shrink-0">
+                                📄 PDF
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/60 shrink-0">
+                                🔗 Link
+                            </span>
+                            {% endif %}
+
+                            <!-- Lesson Title -->
+                            <a href="{% url 'courses:lesson_view' lesson.pk %}" class="text-sm font-semibold text-slate-800 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 truncate transition">
+                                {{ lesson.title }}
+                            </a>
+                        </div>
+
+                        <!-- Right Actions -->
+                        <div class="flex items-center gap-3 shrink-0">
+                            <a href="{% url 'courses:lesson_view' lesson.pk %}" class="px-3 py-1 rounded-md text-xs font-semibold text-slate-600 dark:text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/50 transition">
+                                Launch Study Space &rarr;
+                            </a>
+                            {% if is_owner %}
+                            <form method="post" action="{% url 'courses:lesson_delete' lesson.pk %}" onsubmit="return confirm('Delete this lesson?');">
+                                {% csrf_token %}
+                                <button type="submit" class="text-xs text-slate-300 dark:text-slate-600 hover:text-rose-500 dark:hover:text-rose-400 p-1 transition" title="Delete Lesson">
+                                    🗑️
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <div class="px-6 py-6 text-center text-slate-400 dark:text-slate-500 text-xs">
+                    No lessons yet in this module.
+                    {% if is_owner %}
+                    <button onclick="openAddLessonModal('{{ module.pk }}', '{{ module.title|escapejs }}')" class="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline ml-1">
+                        + Add a lesson
+                    </button>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 p-10 text-center transition-colors">
+        <p class="text-base font-bold text-slate-800 dark:text-slate-200">Your course has no modules yet.</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+            Modules act as chapters or units. Break your course down by adding your first module.
+        </p>
+        {% if is_owner %}
+        <button onclick="openModal('add-module-modal')" class="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition">
+            + Add First Module
+        </button>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<!-- Modal: Add Module -->
+{% if is_owner %}
+<div id="add-module-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs hidden p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-md w-full overflow-hidden">
+        <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">Add New Module</h3>
+            <button onclick="closeModal('add-module-modal')" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">&times;</button>
+        </div>
+        <form method="post" action="{% url 'courses:module_create' course.pk %}">
+            {% csrf_token %}
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Module Title</label>
+                    {{ module_form.title }}
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Display Order</label>
+                    {{ module_form.order }}
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-850 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+                <button type="button" onclick="closeModal('add-module-modal')" class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg">Cancel</button>
+                <button type="submit" class="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm">Save Module</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Add Lesson -->
+<div id="add-lesson-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs hidden p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-lg w-full overflow-hidden">
+        <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div>
+                <h3 class="text-base font-bold text-slate-900 dark:text-white">Add New Lesson</h3>
+                <p id="modal-module-title" class="text-xs text-slate-400 mt-0.5"></p>
+            </div>
+            <button onclick="closeModal('add-lesson-modal')" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">&times;</button>
+        </div>
+        <form id="add-lesson-form" method="post" enctype="multipart/form-data" action="">
+            {% csrf_token %}
+            <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Lesson Title</label>
+                    {{ lesson_form.title }}
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Lesson Type</label>
+                    {{ lesson_form.lesson_type }}
+                </div>
+
+                <!-- Dynamic input fields based on lesson type -->
+                <div id="field-youtube">
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">YouTube Watch or Share URL</label>
+                    {{ lesson_form.youtube_url }}
+                    <p class="text-[11px] text-slate-400 mt-1">Supports standard youtube.com/watch?v=..., youtu.be/..., shorts/...</p>
+                </div>
+
+                <div id="field-pdf" class="hidden">
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Upload PDF Document</label>
+                    {{ lesson_form.pdf_file }}
+                </div>
+
+                <div id="field-link" class="hidden">
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">External Web Resource URL</label>
+                    {{ lesson_form.external_url }}
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Initial Notes / Objectives (Optional)</label>
+                    {{ lesson_form.notes }}
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Order</label>
+                    {{ lesson_form.order }}
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-850 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+                <button type="button" onclick="closeModal('add-lesson-modal')" class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg">Cancel</button>
+                <button type="submit" class="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm">Save Lesson</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function openModal(id) {
+        document.getElementById(id).classList.remove('hidden');
+    }
+    function closeModal(id) {
+        document.getElementById(id).classList.add('hidden');
+    }
+
+    function openAddLessonModal(moduleId, moduleTitle) {
+        const form = document.getElementById('add-lesson-form');
+        form.action = `/module/${moduleId}/lesson/create/`;
+        document.getElementById('modal-module-title').textContent = `Target: ${moduleTitle}`;
+        openModal('add-lesson-modal');
+        updateLessonTypeFields();
+    }
+
+    const typeSelect = document.getElementById('{{ lesson_form.lesson_type.id_for_label }}');
+    if (typeSelect) {
+        typeSelect.addEventListener('change', updateLessonTypeFields);
+    }
+
+    function updateLessonTypeFields() {
+        const typeSelect = document.getElementById('{{ lesson_form.lesson_type.id_for_label }}');
+        if (!typeSelect) return;
+        const val = typeSelect.value;
+        const yt = document.getElementById('field-youtube');
+        const pdf = document.getElementById('field-pdf');
+        const link = document.getElementById('field-link');
+
+        if (yt) yt.classList.toggle('hidden', val !== 'YOUTUBE');
+        if (pdf) pdf.classList.toggle('hidden', val !== 'PDF');
+        if (link) link.classList.toggle('hidden', val !== 'LINK');
+    }
+</script>
+{% endblock %}
