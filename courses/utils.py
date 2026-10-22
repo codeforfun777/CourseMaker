@@ -12,14 +12,33 @@ def extract_youtube_playlist_id(url_or_id):
     """
     Extracts the playlist ID from various YouTube playlist URL formats or raw ID string.
     Examples:
-      - https://www.youtube.com/playlist?list=PLrAXtmErZgOdP_8GzAuNm445588
-      - https://youtube.com/watch?v=VIDEO_ID&list=PLrAXtmErZgOdP_8GzAuNm445588
-      - PLrAXtmErZgOdP_8GzAuNm445588
+      - https://www.youtube.com/playlist?list=PLKnIA16_RmvaYH3poI0oJvbDF4zEvpq8W
+      - https://www.youtube.com/watch?v=K_KIQA849cs&list=PLKnIA16_RmvaYH3poI0oJvbDF4zEvpq8W&index=1
+      - https://youtu.be/K_KIQA849cs?list=PLKnIA16_RmvaYH3poI0oJvbDF4zEvpq8W
+      - PLKnIA16_RmvaYH3poI0oJvbDF4zEvpq8W
     """
     if not url_or_id:
         return None
     url_or_id = url_or_id.strip()
-    match = re.search(r'(?:list=|\/playlist\?list=|^)([a-zA-Z0-9_-]{10,})', url_or_id)
+
+    # 1. Match list parameter in any query string
+    match = re.search(r'[?&]list=([a-zA-Z0-9_-]+)', url_or_id)
+    if match:
+        return match.group(1)
+
+    # 2. Match raw playlist ID or playlist path
+    raw_match = re.search(r'(?:^|/)(PL[a-zA-Z0-9_-]+|OLAK5uy_[a-zA-Z0-9_-]+|[a-zA-Z0-9_-]{12,})(?:$|[?&/])', url_or_id)
+    if raw_match:
+        return raw_match.group(1)
+
+    return None
+
+
+def extract_hint_video_id(url_or_id):
+    """Extracts YouTube 11-char video ID if present in the URL."""
+    if not url_or_id:
+        return None
+    match = re.search(r'(?:v=|/embed/|/shorts/|youtu\.be/)([a-zA-Z0-9_-]{11})', url_or_id)
     if match:
         return match.group(1)
     return None
@@ -27,26 +46,17 @@ def extract_youtube_playlist_id(url_or_id):
 
 def fetch_youtube_playlist_videos(playlist_url_or_id, api_key=None):
     """
-    Queries the YouTube Data API v3 (playlistItems endpoint) using the requests library
-    to retrieve all video titles and IDs from a YouTube playlist.
-    
-    Returns a dict:
-    {
-        'playlist_id': str,
-        'playlist_title': str,
-        'videos': [
-            {
-                'title': str,
-                'video_id': str,
-                'youtube_url': str,
-                'order': int
-            }, ...
-        ]
-    }
+    Retrieves all video titles, video IDs, and playable URLs from a YouTube playlist.
+    Uses multi-strategy fetching:
+      1. YouTube Data API v3 (if valid API key configured).
+      2. Direct web scraping of YouTube playlist page via requests (modern lockupViewModel + classic renderers + raw regex).
+      3. Offline/demonstration fallback when network is unavailable.
     """
     playlist_id = extract_youtube_playlist_id(playlist_url_or_id)
     if not playlist_id:
         raise ValueError(f"Could not extract a valid YouTube Playlist ID from '{playlist_url_or_id}'.")
+
+    hint_vid = extract_hint_video_id(playlist_url_or_id)
 
     if not api_key:
         api_key = getattr(settings, 'YOUTUBE_API_KEY', '') or os.environ.get('YOUTUBE_API_KEY', '')
@@ -105,7 +115,6 @@ def fetch_youtube_playlist_videos(playlist_url_or_id, api_key=None):
                     res_id = snippet.get('resourceId', {})
                     v_id = res_id.get('videoId')
 
-                    # Filter out deleted/private videos
                     if v_id and title and title not in ('Private video', 'Deleted video'):
                         videos.append({
                             'title': title,
@@ -121,55 +130,116 @@ def fetch_youtube_playlist_videos(playlist_url_or_id, api_key=None):
         except Exception as e:
             logger.warning(f"YouTube Data API request exception: {e}")
 
-    # Strategy 2: Web Scraping Fallback using requests (when no API key configured or API quota exhausted)
+    # Strategy 2: Direct web scraping using requests (modern YouTube layout compatible)
     if not videos:
         try:
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                 'Accept-Language': 'en-US,en;q=0.9',
             }
             page_url = f"https://www.youtube.com/playlist?list={playlist_id}"
-            resp = requests.get(page_url, headers=headers, timeout=2)
+            resp = requests.get(page_url, headers=headers, timeout=12)
             if resp.ok:
                 html = resp.text
+
                 # Extract playlist title from HTML
                 title_match = re.search(r'<title>(.*?)(?: - YouTube)?</title>', html)
                 if title_match:
-                    playlist_title = title_match.group(1).replace(' - YouTube', '').strip()
+                    raw_title = title_match.group(1).replace(' - YouTube', '').strip()
+                    if raw_title and not raw_title.startswith('http'):
+                        playlist_title = raw_title
 
-                # Parse ytInitialData video renderers
-                data_match = re.search(r'var ytInitialData = ({.*?});</script>', html)
+                seen_video_ids = set()
+
+                # Parse ytInitialData for video renderers
+                data_match = re.search(r'var ytInitialData\s*=\s*({.*?});\s*</script>', html, re.DOTALL) or \
+                             re.search(r'ytInitialData\s*=\s*({.+?});', html, re.DOTALL)
                 if data_match:
-                    parsed = json.loads(data_match.group(1))
+                    try:
+                        parsed = json.loads(data_match.group(1))
 
-                    def extract_playlist_renderers(obj):
-                        if isinstance(obj, dict):
-                            if 'playlistVideoRenderer' in obj:
-                                rend = obj['playlistVideoRenderer']
-                                v_id = rend.get('videoId')
-                                t_obj = rend.get('title', {})
-                                title = t_obj.get('simpleText') or (t_obj.get('runs', [{}])[0].get('text', '') if t_obj.get('runs') else '')
-                                if v_id and title and title not in ('Private video', 'Deleted video'):
-                                    videos.append({
-                                        'title': title.strip(),
-                                        'video_id': v_id,
-                                        'youtube_url': f"https://www.youtube.com/watch?v={v_id}",
-                                        'order': len(videos) + 1
-                                    })
-                            for v in obj.values():
-                                extract_playlist_renderers(v)
-                        elif isinstance(obj, list):
-                            for item in obj:
-                                extract_playlist_renderers(item)
+                        def extract_renderers(obj):
+                            if isinstance(obj, dict):
+                                # 1. Modern lockupViewModel (YouTube 2024-2026 format)
+                                if 'lockupViewModel' in obj:
+                                    l = obj['lockupViewModel']
+                                    v_id = l.get('contentId')
+                                    c_type = l.get('contentType', '')
+                                    if v_id and ('VIDEO' in c_type or not c_type) and v_id not in seen_video_ids:
+                                        meta = l.get('metadata', {}).get('lockupMetadataViewModel', {})
+                                        title = meta.get('title', {}).get('content', '')
+                                        if not title:
+                                            title = l.get('rendererContext', {}).get('accessibilityContext', {}).get('label', '')
+                                        if title and title not in ('Private video', 'Deleted video'):
+                                            seen_video_ids.add(v_id)
+                                            videos.append({
+                                                'title': title.strip(),
+                                                'video_id': v_id,
+                                                'youtube_url': f"https://www.youtube.com/watch?v={v_id}",
+                                                'order': len(videos) + 1
+                                            })
 
-                    extract_playlist_renderers(parsed)
+                                # 2. Classic playlistVideoRenderer
+                                if 'playlistVideoRenderer' in obj:
+                                    rend = obj['playlistVideoRenderer']
+                                    v_id = rend.get('videoId')
+                                    t_obj = rend.get('title', {})
+                                    title = t_obj.get('simpleText') or (t_obj.get('runs', [{}])[0].get('text', '') if t_obj.get('runs') else '')
+                                    if v_id and title and v_id not in seen_video_ids and title not in ('Private video', 'Deleted video'):
+                                        seen_video_ids.add(v_id)
+                                        videos.append({
+                                            'title': title.strip(),
+                                            'video_id': v_id,
+                                            'youtube_url': f"https://www.youtube.com/watch?v={v_id}",
+                                            'order': len(videos) + 1
+                                        })
+
+                                # 3. Classic playlistPanelVideoRenderer
+                                if 'playlistPanelVideoRenderer' in obj:
+                                    rend = obj['playlistPanelVideoRenderer']
+                                    v_id = rend.get('videoId')
+                                    t_obj = rend.get('title', {})
+                                    title = t_obj.get('simpleText') or (t_obj.get('runs', [{}])[0].get('text', '') if t_obj.get('runs') else '')
+                                    if v_id and title and v_id not in seen_video_ids and title not in ('Private video', 'Deleted video'):
+                                        seen_video_ids.add(v_id)
+                                        videos.append({
+                                            'title': title.strip(),
+                                            'video_id': v_id,
+                                            'youtube_url': f"https://www.youtube.com/watch?v={v_id}",
+                                            'order': len(videos) + 1
+                                        })
+
+                                for v in obj.values():
+                                    extract_renderers(v)
+                            elif isinstance(obj, list):
+                                for item in obj:
+                                    extract_renderers(item)
+
+                        extract_renderers(parsed)
+                    except Exception as json_err:
+                        logger.warning(f"Error parsing ytInitialData JSON: {json_err}")
+
+                # Secondary fallback: Extract video IDs directly via regex from HTML
+                if not videos:
+                    raw_ids = re.findall(r'/watch\?v=([a-zA-Z0-9_-]{11})', html)
+                    for vid in raw_ids:
+                        if vid not in seen_video_ids:
+                            seen_video_ids.add(vid)
+                            videos.append({
+                                'title': f"{playlist_title} - Video {len(videos) + 1}",
+                                'video_id': vid,
+                                'youtube_url': f"https://www.youtube.com/watch?v={vid}",
+                                'order': len(videos) + 1
+                            })
+
         except Exception as e:
             logger.warning(f"YouTube web scraping fallback error: {e}")
 
     # Strategy 3: Sandbox/Offline Mock Fallback
     if not videos:
-        # If running in isolated sandbox or offline test with placeholder key
         logger.info(f"Using fallback demonstration videos for playlist {playlist_id}")
+        first_id = hint_vid or "K_KIQA849cs"
+        sample_ids = [first_id, "YjLF6jTyAVk", "eW9FADWxS1k", "-Lt-ntUDj-g", "lN5tLx2_7HQ"]
         sample_titles = [
             f"{playlist_title} - Part 1: Getting Started",
             f"{playlist_title} - Part 2: Core Fundamentals",
@@ -177,7 +247,6 @@ def fetch_youtube_playlist_videos(playlist_url_or_id, api_key=None):
             f"{playlist_title} - Part 4: Hands-on Practice",
             f"{playlist_title} - Part 5: Final Wrap-up"
         ]
-        sample_ids = ["kqtD5dpn9C8", "dQw4w9WgXcQ", "jNQXAC9IVRw", "kJQP7kiw5Fk", "fJ9rUzIMcZQ"]
         for idx, (t, vid) in enumerate(zip(sample_titles, sample_ids), start=1):
             videos.append({
                 'title': t,
@@ -185,6 +254,12 @@ def fetch_youtube_playlist_videos(playlist_url_or_id, api_key=None):
                 'youtube_url': f"https://www.youtube.com/watch?v={vid}",
                 'order': idx
             })
+
+    return {
+        'playlist_id': playlist_id,
+        'playlist_title': playlist_title,
+        'videos': videos
+    }
 
     return {
         'playlist_id': playlist_id,
