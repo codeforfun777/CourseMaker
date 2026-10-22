@@ -23,10 +23,9 @@
         scrollbar-width: none !important;
     }
 
-    /* Clean Focus Video Mode: Crop YouTube top header / overlays while keeping bottom subtitles 100% inside container */
+    /* Clean Focus Video Mode: 100% True-Fit Native Aspect Ratio (Zero crop, zero zoom, matches YouTube original size) */
     .crop-clean-focus {
-        transform: scale(1.14);
-        transform-origin: center bottom;
+        transform: none !important;
     }
 
     /* Fullscreen container sizing */
@@ -188,8 +187,8 @@
                         <!-- Transparent Click Overlay (Play/Pause on click, Fullscreen on double-click) -->
                         <div id="player-click-surface" class="absolute inset-0 z-10 cursor-pointer" onclick="handlePlayerClick(event)" ondblclick="togglePlayerFullscreen(event)"></div>
 
-                        <!-- Center Play / Pause Indicator Overlay (Aligned exactly with YouTube's center icon to eliminate ghosting) -->
-                        <div id="player-center-play-btn" onclick="togglePlayPause()" class="absolute top-[43%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 flex items-center justify-center cursor-pointer transition-all duration-300">
+                        <!-- Center Play / Pause Indicator Overlay (Centered at exact 50% 50% matching YouTube native center button) -->
+                        <div id="player-center-play-btn" onclick="togglePlayPause()" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 flex items-center justify-center cursor-pointer transition-all duration-300">
                             <div class="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-slate-950/95 hover:bg-slate-900 border-2 border-indigo-500/80 text-white flex items-center justify-center shadow-2xl transform transition-transform hover:scale-110 active:scale-95">
                                 <svg id="center-play-icon" class="w-8 h-8 sm:w-9 sm:h-9 ml-1 text-white fill-current" viewBox="0 0 24 24">
                                     <path d="M8 5v14l11-7z"/>
