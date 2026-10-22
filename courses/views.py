@@ -1,7 +1,9 @@
 import json
+import logging
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
+from django.db import models
 from django.http import JsonResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -9,6 +11,9 @@ from django.views.decorators.http import require_POST
 from .forms import CourseForm, ModuleForm, LessonForm, LessonNotesForm, SignUpForm
 from .models import Course, Module, Lesson, LessonTimestamp
 from .youtube_utils import extract_youtube_chapters, parse_timestamp_lines
+from .utils import generate_ai_course_syllabus, fetch_youtube_playlist_videos
+
+logger = logging.getLogger(__name__)
 
 
 def campus_feed(request):
@@ -90,7 +95,9 @@ def course_toggle_public(request, pk):
 @login_required
 @require_POST
 def module_create(request, course_pk):
-    course = get_object_or_404(Course, pk=course_pk, user=request.user)
+    course = get_object_or_404(Course, pk=course_pk)
+    if course.user != request.user:
+        return HttpResponseForbidden("Permission denied.")
     form = ModuleForm(request.POST)
     if form.is_valid():
         module = form.save(commit=False)
@@ -401,3 +408,154 @@ def signup_view(request):
         form = SignUpForm()
 
     return render(request, 'courses/signup.html', {'form': form})
+
+
+@login_required
+@require_POST
+def generate_ai_syllabus(request):
+    """
+    AI Syllabus Generator:
+    Accepts topic, resource description, and timeline duration.
+    Invokes the AI curriculum engine and creates a Course with structured Modules and Lessons.
+    """
+    topic = request.POST.get('topic', '').strip()
+    resources_description = request.POST.get('resources_description', '').strip()
+    timeline_duration = request.POST.get('timeline_duration', '1 Month').strip()
+
+    if not topic:
+        messages.error(request, "Please provide a course topic to generate an AI syllabus.")
+        return redirect('courses:dashboard')
+
+    try:
+        syllabus = generate_ai_course_syllabus(
+            topic=topic,
+            resources_description=resources_description,
+            timeline_duration=timeline_duration
+        )
+
+        course_title = syllabus.get('course_title') or f"{topic} ({timeline_duration})"
+        course_desc = syllabus.get('course_description') or resources_description or f"AI-generated study track for {topic}."
+
+        new_course = Course.objects.create(
+            user=request.user,
+            title=course_title,
+            description=course_desc,
+            is_public=False
+        )
+
+        modules_data = syllabus.get('modules', [])
+        total_lessons_added = 0
+
+        for m_idx, mod_item in enumerate(modules_data, start=1):
+            mod_title = mod_item.get('title') or f"Module {m_idx}"
+            module = Module.objects.create(
+                course=new_course,
+                title=mod_title,
+                order=m_idx
+            )
+
+            lessons_to_create = []
+            for l_idx, les_item in enumerate(mod_item.get('lessons', []), start=1):
+                l_type = les_item.get('lesson_type', 'LINK').upper()
+                if l_type not in ('YOUTUBE', 'PDF', 'LINK'):
+                    l_type = 'LINK'
+
+                ext_url = les_item.get('external_url') or les_item.get('url', '')
+                yt_url = les_item.get('youtube_url', '') if l_type == 'YOUTUBE' else ''
+
+                lessons_to_create.append(
+                    Lesson(
+                        module=module,
+                        title=les_item.get('title', f"Lesson {l_idx}"),
+                        lesson_type=l_type,
+                        external_url=ext_url or None,
+                        youtube_url=yt_url or None,
+                        order=l_idx
+                    )
+                )
+
+            if lessons_to_create:
+                Lesson.objects.bulk_create(lessons_to_create)
+                total_lessons_added += len(lessons_to_create)
+
+        messages.success(
+            request,
+            f'✨ Successfully generated course "{new_course.title}" with {len(modules_data)} modules and {total_lessons_added} lessons!'
+        )
+        return redirect('courses:course_detail', pk=new_course.pk)
+
+    except Exception as e:
+        logger.error(f"Error in generate_ai_syllabus: {e}")
+        messages.error(request, f"Unable to generate syllabus: {str(e)}")
+        return redirect('courses:dashboard')
+
+
+ai_generate_course = generate_ai_syllabus
+
+
+@login_required
+@require_POST
+def import_youtube_playlist(request, course_pk):
+    """
+    YouTube Playlist Batch Importer:
+    Accepts a YouTube Playlist URL or ID, queries the YouTube API,
+    and creates a new Module containing each video as a sequential Lesson (type YOUTUBE).
+    """
+    course = get_object_or_404(Course, pk=course_pk)
+    if course.user != request.user:
+        return HttpResponseForbidden("Permission denied.")
+
+    playlist_url = request.POST.get('playlist_url', '').strip()
+    custom_module_title = request.POST.get('module_title', '').strip()
+
+    if not playlist_url:
+        messages.error(request, "Please provide a valid YouTube Playlist URL or ID.")
+        return redirect('courses:course_detail', pk=course.pk)
+
+    try:
+        playlist_data = fetch_youtube_playlist_videos(playlist_url)
+        videos = playlist_data.get('videos', [])
+
+        if not videos:
+            messages.error(request, "No playable videos found in the specified YouTube playlist.")
+            return redirect('courses:course_detail', pk=course.pk)
+
+        # Determine module title
+        mod_title = custom_module_title or playlist_data.get('playlist_title') or "Imported YouTube Playlist"
+
+        # Determine next module order
+        max_order = course.modules.aggregate(models.Max('order'))['order__max'] or 0
+        new_module_order = max_order + 1
+
+        module = Module.objects.create(
+            course=course,
+            title=mod_title,
+            order=new_module_order
+        )
+
+        lessons = []
+        for v in videos:
+            lessons.append(
+                Lesson(
+                    module=module,
+                    title=v.get('title', 'Video Lesson'),
+                    lesson_type=Lesson.LessonType.YOUTUBE,
+                    youtube_url=v.get('youtube_url'),
+                    order=v.get('order', len(lessons) + 1)
+                )
+            )
+
+        Lesson.objects.bulk_create(lessons)
+
+        messages.success(
+            request,
+            f'🎬 Successfully imported {len(lessons)} videos from playlist into new module "{module.title}"!'
+        )
+
+    except ValueError as ve:
+        messages.error(request, str(ve))
+    except Exception as e:
+        logger.error(f"Error importing YouTube playlist: {e}")
+        messages.error(request, f"Failed to import YouTube playlist: {str(e)}")
+
+    return redirect('courses:course_detail', pk=course.pk)

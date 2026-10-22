@@ -15,6 +15,9 @@ urlpatterns = [
     path('course/<int:pk>/', views.course_detail, name='course_detail'),
     path('course/<int:pk>/delete/', views.course_delete, name='course_delete'),
     path('course/<int:pk>/toggle-public/', views.course_toggle_public, name='course_toggle_public'),
+    path('course/ai-generate/', views.generate_ai_syllabus, name='generate_ai_syllabus'),
+    path('course/generate-ai-syllabus/', views.generate_ai_syllabus, name='ai_generate_course'),
+    path('course/<int:course_pk>/import-playlist/', views.import_youtube_playlist, name='import_youtube_playlist'),
 
     # Modules
     path('course/<int:course_pk>/module/create/', views.module_create, name='module_create'),

@@ -15,8 +15,12 @@
             </p>
         </div>
 
-        <div class="flex items-center gap-3">
-            <button onclick="openModal('create-course-modal')" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 transition shadow-sm shadow-indigo-200 dark:shadow-none">
+        <div class="flex flex-wrap items-center gap-3">
+            <button onclick="openModal('ai-generate-course-modal')" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold text-sm transition shadow-sm shadow-purple-200 dark:shadow-none cursor-pointer">
+                <span>✨</span>
+                <span>Generate with AI</span>
+            </button>
+            <button onclick="openModal('create-course-modal')" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 transition shadow-sm shadow-indigo-200 dark:shadow-none cursor-pointer">
                 <span class="text-base leading-none">+</span>
                 <span>Create New Course</span>
             </button>
@@ -145,8 +149,12 @@
             <p class="mt-2 text-sm text-slate-500 dark:text-slate-400 leading-relaxed max-w-sm mx-auto">
                 Ready to organize your study material? Create your first course track with YouTube videos, lecture PDFs, and web articles.
             </p>
-            <div class="mt-6">
-                <button onclick="openModal('create-course-modal')" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 transition shadow-sm">
+            <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
+                <button onclick="openModal('ai-generate-course-modal')" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold text-sm transition shadow-sm cursor-pointer">
+                    <span>✨</span>
+                    <span>Generate with AI</span>
+                </button>
+                <button onclick="openModal('create-course-modal')" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 transition shadow-sm cursor-pointer">
                     <span>+</span>
                     <span>Create Your First Course</span>
                 </button>
@@ -193,6 +201,60 @@
         </form>
     </div>
 </div>
+
+<!-- Modal: AI Course Generator -->
+<div id="ai-generate-course-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs hidden p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-lg w-full overflow-hidden transform transition-all">
+        <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-950/70 text-purple-600 dark:text-purple-400 flex items-center justify-center text-base">
+                    ✨
+                </div>
+                <div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white">AI Course Syllabus Generator</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Generate a structured learning path with modules & lessons in seconds</p>
+                </div>
+            </div>
+            <button onclick="closeModal('ai-generate-course-modal')" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl font-bold">&times;</button>
+        </div>
+        <form method="post" action="{% url 'courses:generate_ai_syllabus' %}" id="ai-generator-form">
+            {% csrf_token %}
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                        Topic or Subject <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text" name="topic" required placeholder="e.g. Modern Full-Stack Web Development with Django & React" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none transition" />
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                        Timeline / Target Duration
+                    </label>
+                    <select name="timeline_duration" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none transition">
+                        <option value="1 Week">1 Week (Sprint / Crash Course)</option>
+                        <option value="2 Weeks">2 Weeks (Intensive Bootcamp)</option>
+                        <option value="1 Month" selected>1 Month (Comprehensive Study)</option>
+                        <option value="3 Months">3 Months (Deep Mastery)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                        Resources & Focus Description (Optional)
+                    </label>
+                    <textarea name="resources_description" rows="3" placeholder="Paste notes, textbook chapters, or topics you want emphasized (e.g. Focus on authentication, REST APIs, and deployment on Docker)." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none transition"></textarea>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-850 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
+                <button type="button" onclick="closeModal('ai-generate-course-modal')" class="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                    Cancel
+                </button>
+                <button type="submit" id="ai-submit-btn" class="inline-flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 transition shadow-sm cursor-pointer">
+                    <span>✨ Generate Course</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -206,7 +268,19 @@
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             closeModal('create-course-modal');
+            closeModal('ai-generate-course-modal');
         }
     });
+
+    const aiForm = document.getElementById('ai-generator-form');
+    if (aiForm) {
+        aiForm.addEventListener('submit', function() {
+            const btn = document.getElementById('ai-submit-btn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Generating Syllabus...`;
+            }
+        });
+    }
 </script>
 {% endblock %}

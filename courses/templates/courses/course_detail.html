@@ -89,10 +89,16 @@
         </div>
 
         {% if is_owner %}
-        <button onclick="openModal('add-module-modal')" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-700 text-white text-xs font-semibold transition shadow-2xs">
-            <span>+</span>
-            <span>Add Module</span>
-        </button>
+        <div class="flex items-center gap-2">
+            <button onclick="openModal('import-playlist-modal')" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition shadow-2xs cursor-pointer">
+                <span>📺</span>
+                <span>Import Playlist</span>
+            </button>
+            <button onclick="openModal('add-module-modal')" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-700 text-white text-xs font-semibold transition shadow-2xs cursor-pointer">
+                <span>+</span>
+                <span>Add Module</span>
+            </button>
+        </div>
         {% endif %}
     </div>
 
@@ -202,9 +208,14 @@
             Modules act as chapters or units. Break your course down by adding your first module.
         </p>
         {% if is_owner %}
-        <button onclick="openModal('add-module-modal')" class="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition">
-            + Add First Module
-        </button>
+        <div class="mt-4 flex flex-wrap items-center justify-center gap-2.5">
+            <button onclick="openModal('add-module-modal')" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition cursor-pointer">
+                + Add First Module
+            </button>
+            <button onclick="openModal('import-playlist-modal')" class="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition cursor-pointer">
+                📺 Import YouTube Playlist
+            </button>
+        </div>
         {% endif %}
     </div>
     {% endif %}
@@ -295,6 +306,49 @@
         </form>
     </div>
 </div>
+
+<!-- Modal: Import YouTube Playlist -->
+<div id="import-playlist-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs hidden p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-lg w-full overflow-hidden transform transition-all">
+        <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-950/70 text-red-600 dark:text-red-400 flex items-center justify-center text-base">
+                    📺
+                </div>
+                <div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white">Import YouTube Playlist</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Fetch videos from a playlist and create structured lessons</p>
+                </div>
+            </div>
+            <button onclick="closeModal('import-playlist-modal')" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg font-bold">&times;</button>
+        </div>
+        <form method="post" action="{% url 'courses:import_youtube_playlist' course.pk %}" id="import-playlist-form">
+            {% csrf_token %}
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                        YouTube Playlist URL or ID <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text" name="playlist_url" required placeholder="https://www.youtube.com/playlist?list=PL4cUxeGkcC9g..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-red-500 outline-none transition" />
+                    <p class="text-[11px] text-slate-400 mt-1">Accepts full playlist URL or just the Playlist ID (e.g., PL4cUxeGkc...)</p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                        Custom Module Title (Optional)
+                    </label>
+                    <input type="text" name="module_title" placeholder="Leave blank to use YouTube playlist title" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-red-500 outline-none transition" />
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-850 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+                <button type="button" onclick="closeModal('import-playlist-modal')" class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition">Cancel</button>
+                <button type="submit" id="import-playlist-btn" class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition cursor-pointer">
+                    <span>📺 Import Playlist</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endif %}
 {% endblock %}
 
@@ -306,6 +360,16 @@
     function closeModal(id) {
         document.getElementById(id).classList.add('hidden');
     }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const modals = ['add-module-modal', 'add-lesson-modal', 'import-playlist-modal'];
+            modals.forEach(m => {
+                const el = document.getElementById(m);
+                if (el) el.classList.add('hidden');
+            });
+        }
+    });
 
     function openAddLessonModal(moduleId, moduleTitle) {
         const form = document.getElementById('add-lesson-form');
@@ -331,6 +395,17 @@
         if (yt) yt.classList.toggle('hidden', val !== 'YOUTUBE');
         if (pdf) pdf.classList.toggle('hidden', val !== 'PDF');
         if (link) link.classList.toggle('hidden', val !== 'LINK');
+    }
+
+    const importForm = document.getElementById('import-playlist-form');
+    if (importForm) {
+        importForm.addEventListener('submit', function() {
+            const btn = document.getElementById('import-playlist-btn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Importing Playlist...`;
+            }
+        });
     }
 </script>
 {% endblock %}

@@ -233,3 +233,78 @@ class CourseViewsTestCase(TestCase):
         data = response.json()
         self.assertEqual(data['status'], 'success')
         self.assertGreaterEqual(len(data['timestamps']), 2)
+
+    def test_generate_ai_syllabus_view(self):
+        self.client.login(username='alice', password='password123')
+        url = reverse('courses:generate_ai_syllabus')
+        response = self.client.post(url, {
+            'topic': 'Machine Learning Fundamentals',
+            'timeline_duration': '2 Weeks',
+            'resources_description': 'Supervised and Unsupervised Learning'
+        })
+        self.assertEqual(response.status_code, 302)
+        generated_course = Course.objects.filter(user=self.user, title__icontains='Machine Learning').first()
+        self.assertIsNotNone(generated_course)
+        self.assertGreaterEqual(generated_course.modules.count(), 1)
+        first_module = generated_course.modules.first()
+        self.assertGreaterEqual(first_module.lessons.count(), 1)
+
+    def test_import_youtube_playlist_view(self):
+        self.client.login(username='alice', password='password123')
+        url = reverse('courses:import_youtube_playlist', args=[self.public_course.pk])
+        response = self.client.post(url, {
+            'playlist_url': 'PL4cUxeGkcC9gC88BEo9Px3Mt6QkhNYU1p',
+            'module_title': 'Custom React Playlist'
+        })
+        self.assertEqual(response.status_code, 302)
+        imported_module = self.public_course.modules.filter(title='Custom React Playlist').first()
+        self.assertIsNotNone(imported_module)
+        self.assertGreaterEqual(imported_module.lessons.count(), 1)
+        first_lesson = imported_module.lessons.first()
+        self.assertEqual(first_lesson.lesson_type, Lesson.LessonType.YOUTUBE)
+        self.assertTrue(first_lesson.youtube_url.startswith('https://www.youtube.com/watch?v='))
+
+    def test_import_youtube_playlist_permission(self):
+        # Bob should not be able to import playlist into Alice's course
+        self.client.login(username='bob', password='password123')
+        url = reverse('courses:import_youtube_playlist', args=[self.public_course.pk])
+        response = self.client.post(url, {
+            'playlist_url': 'PL4cUxeGkcC9gC88BEo9Px3Mt6QkhNYU1p'
+        })
+        self.assertEqual(response.status_code, 403)
+
+
+class CourseAutomationUtilsTestCase(TestCase):
+    def test_extract_youtube_playlist_id(self):
+        from .utils import extract_youtube_playlist_id
+        valid_cases = [
+            ('PL4cUxeGkcC9gC88BEo9Px3Mt6QkhNYU1p', 'PL4cUxeGkcC9gC88BEo9Px3Mt6QkhNYU1p'),
+            ('https://www.youtube.com/playlist?list=PL4cUxeGkcC9gC88BEo9Px3Mt6QkhNYU1p', 'PL4cUxeGkcC9gC88BEo9Px3Mt6QkhNYU1p'),
+            ('https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLr6-S5450-48hUshVeb4xKx0Kk5h6KqYx', 'PLr6-S5450-48hUshVeb4xKx0Kk5h6KqYx'),
+            ('http://youtu.be/watch?list=PLbpi6ZahtOH6Bv346L4e13_m27r07bB8t', 'PLbpi6ZahtOH6Bv346L4e13_m27r07bB8t'),
+        ]
+        for input_val, expected_id in valid_cases:
+            self.assertEqual(extract_youtube_playlist_id(input_val), expected_id)
+
+    def test_generate_ai_course_syllabus(self):
+        from .utils import generate_ai_course_syllabus
+        syllabus = generate_ai_course_syllabus('Python for Data Science', timeline_duration='1 Month')
+        self.assertIn('course_title', syllabus)
+        self.assertIn('modules', syllabus)
+        self.assertGreaterEqual(len(syllabus['modules']), 1)
+        for m in syllabus['modules']:
+            self.assertTrue('title' in m or 'module_title' in m)
+            self.assertIn('lessons', m)
+            self.assertGreaterEqual(len(m['lessons']), 1)
+
+    def test_fetch_youtube_playlist_videos(self):
+        from .utils import fetch_youtube_playlist_videos
+        result = fetch_youtube_playlist_videos('PL4cUxeGkcC9gC88BEo9Px3Mt6QkhNYU1p')
+        self.assertIn('playlist_title', result)
+        self.assertIn('videos', result)
+        self.assertGreaterEqual(len(result['videos']), 1)
+        first_video = result['videos'][0]
+        self.assertIn('title', first_video)
+        self.assertIn('video_id', first_video)
+        self.assertIn('youtube_url', first_video)
+
