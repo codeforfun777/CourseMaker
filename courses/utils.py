@@ -300,7 +300,12 @@ def generate_ai_course_syllabus(topic, resources_description='', timeline_durati
     timeline_duration = (timeline_duration or '1 Month').strip()
 
     if not api_key:
-        api_key = getattr(settings, 'AI_API_KEY', '') or os.environ.get('AI_API_KEY', '')
+        api_key = (
+            getattr(settings, 'GEMINI_API_KEY', '')
+            or getattr(settings, 'AI_API_KEY', '')
+            or os.environ.get('GEMINI_API_KEY', '')
+            or os.environ.get('AI_API_KEY', '')
+        )
 
     is_placeholder_key = (
         not api_key
@@ -312,23 +317,23 @@ def generate_ai_course_syllabus(topic, resources_description='', timeline_durati
 
     syllabus_data = None
 
-    # Strategy 1: Live AI API Query via Gemini or OpenAI if real API key configured
+    # Strategy 1: Live AI API Query via Google Gemini or OpenAI
     if not is_placeholder_key:
         prompt = (
-            f"You are an expert curriculum architect and senior university instructor.\n"
+            f"You are an expert university curriculum architect.\n"
             f"Design a comprehensive, structured course syllabus for:\n"
             f"Topic: {topic}\n"
-            f"Resource Description/Focus: {resources_description or 'Industry best practices, theory, and practical projects'}\n"
-            f"Timeline Duration: {timeline_duration}\n\n"
-            f"Return ONLY a valid, parseable JSON object matching this exact schema without markdown formatting or code fences:\n"
+            f"Focus & Resources: {resources_description or 'Comprehensive theory, best practices, and hands-on projects'}\n"
+            f"Timeline: {timeline_duration}\n\n"
+            f"Return a clean JSON object with this exact schema:\n"
             f'{{\n'
-            f'  "course_title": "{topic}: Complete Mastery",\n'
-            f'  "course_description": "A structured curriculum designed to master {topic} in {timeline_duration}.",\n'
+            f'  "course_title": "{topic} ({timeline_duration})",\n'
+            f'  "course_description": "Curriculum overview...",\n'
             f'  "modules": [\n'
             f'    {{\n'
-            f'      "title": "Module 1: Foundations",\n'
+            f'      "title": "Module 1: Getting Started",\n'
             f'      "lessons": [\n'
-            f'        {{"title": "Lesson 1: Introduction", "lesson_type": "LINK", "external_url": "https://developer.mozilla.org"}}\n'
+            f'        {{"title": "Lesson 1: Introduction", "lesson_type": "LINK", "external_url": "https://example.com"}}\n'
             f'      ]\n'
             f'    }}\n'
             f'  ]\n'
@@ -336,25 +341,8 @@ def generate_ai_course_syllabus(topic, resources_description='', timeline_durati
         )
 
         try:
-            # Check for Gemini API (starts with AIza) or default to Gemini
-            if api_key.startswith('AIza') or 'gemini' in api_key.lower():
-                gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-                payload = {
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"temperature": 0.4}
-                }
-                resp = requests.post(gemini_url, json=payload, timeout=15)
-                if resp.ok:
-                    data = resp.json()
-                    candidates = data.get('candidates', [])
-                    if candidates:
-                        text_resp = candidates[0].get('content', {}).get('parts', [{}])[0].get('text', '')
-                        cleaned_json = re.sub(r'^```(?:json)?\s*', '', text_resp.strip(), flags=re.MULTILINE)
-                        cleaned_json = re.sub(r'\s*```$', '', cleaned_json.strip(), flags=re.MULTILINE)
-                        syllabus_data = json.loads(cleaned_json)
-
             # Check for OpenAI API (starts with sk-)
-            elif api_key.startswith('sk-'):
+            if api_key.startswith('sk-'):
                 openai_url = "https://api.openai.com/v1/chat/completions"
                 headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
                 payload = {
@@ -365,13 +353,50 @@ def generate_ai_course_syllabus(topic, resources_description='', timeline_durati
                     ],
                     "temperature": 0.4
                 }
-                resp = requests.post(openai_url, json=payload, headers=headers, timeout=15)
+                resp = requests.post(openai_url, json=payload, headers=headers, timeout=20)
                 if resp.ok:
                     data = resp.json()
                     text_resp = data['choices'][0]['message']['content']
                     cleaned_json = re.sub(r'^```(?:json)?\s*', '', text_resp.strip(), flags=re.MULTILINE)
                     cleaned_json = re.sub(r'\s*```$', '', cleaned_json.strip(), flags=re.MULTILINE)
                     syllabus_data = json.loads(cleaned_json)
+
+            # Default: Google Gemini API (from https://aistudio.google.com/api-keys)
+            else:
+                models_to_try = [
+                    "gemini-flash-lite-latest",
+                    "gemini-flash-latest",
+                    "gemini-pro-latest",
+                    "gemini-2.0-flash",
+                    "gemini-1.5-flash",
+                ]
+                for model_name in models_to_try:
+                    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+                    payload = {
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {
+                            "temperature": 0.3,
+                            "responseMimeType": "application/json"
+                        }
+                    }
+                    try:
+                        resp = requests.post(gemini_url, json=payload, timeout=25)
+                        if resp.ok:
+                            data = resp.json()
+                            candidates = data.get('candidates', [])
+                            if candidates:
+                                text_resp = candidates[0].get('content', {}).get('parts', [{}])[0].get('text', '')
+                                cleaned_json = re.sub(r'^```(?:json)?\s*', '', text_resp.strip(), flags=re.MULTILINE)
+                                cleaned_json = re.sub(r'\s*```$', '', cleaned_json.strip(), flags=re.MULTILINE)
+                                parsed = json.loads(cleaned_json)
+                                if isinstance(parsed, dict) and ('modules' in parsed or 'lessons' in parsed):
+                                    syllabus_data = parsed
+                                    logger.info(f"Successfully generated AI syllabus with {model_name}!")
+                                    break
+                        else:
+                            logger.warning(f"Gemini model {model_name} returned status {resp.status_code}: {resp.text[:150]}")
+                    except Exception as mod_err:
+                        logger.warning(f"Failed querying Gemini model {model_name}: {mod_err}")
 
         except Exception as e:
             logger.warning(f"AI API query encountered error: {e}. Falling back to rule-based engine.")
@@ -489,6 +514,7 @@ def serialize_module(module):
             'title': lesson.title,
             'lesson_type': lesson.lesson_type,
             'youtube_url': lesson.youtube_url or '',
+            'google_drive_url': lesson.google_drive_url or '',
             'external_url': lesson.external_url or '',
             'notes': lesson.notes or '',
             'is_completed': lesson.is_completed,
@@ -561,6 +587,7 @@ def import_module_from_dict(course, module_data, default_order=None):
             title=l_title,
             lesson_type=l_type,
             youtube_url=l_item.get('youtube_url') or None,
+            google_drive_url=l_item.get('google_drive_url') or None,
             external_url=l_item.get('external_url') or None,
             notes=l_item.get('notes', ''),
             is_completed=bool(l_item.get('is_completed', False)),

@@ -227,6 +227,30 @@
         {% block content %}{% endblock %}
     </main>
 
+    <!-- Global Footer -->
+    {% block footer %}
+    <footer class="mt-auto border-t border-slate-200/80 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md py-6 transition-colors">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center space-x-2.5">
+                <div class="w-6 h-6 rounded-lg bg-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-2xs">
+                    ⚡
+                </div>
+                <span class="font-bold text-sm tracking-tight text-slate-900 dark:text-white">
+                    Course<span class="text-indigo-600 dark:text-indigo-400">Maker</span>
+                </span>
+                <span class="text-slate-300 dark:text-slate-700">|</span>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                    Developed by <span class="font-semibold text-slate-900 dark:text-slate-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition">Radwan Islam</span>
+                </p>
+            </div>
+            <div class="flex items-center space-x-4 text-xs text-slate-400 dark:text-slate-500">
+                <span>Focus &bull; Learn &bull; Excel</span>
+                <span>&copy; {% now "Y" %} CourseMaker</span>
+            </div>
+        </div>
+    </footer>
+    {% endblock footer %}
+
     <!-- Global Theme Switcher Script -->
     <script>
         function toggleTheme() {

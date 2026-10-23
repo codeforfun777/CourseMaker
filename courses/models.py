@@ -71,7 +71,8 @@ class Module(models.Model):
 class Lesson(models.Model):
     class LessonType(models.TextChoices):
         YOUTUBE = 'YOUTUBE', 'YouTube Video'
-        PDF = 'PDF', 'PDF Document'
+        DRIVE = 'DRIVE', 'Google Drive Document / PDF'
+        PDF = 'PDF', 'PDF Document (Legacy)'
         LINK = 'LINK', 'Web Article'
 
     module = models.ForeignKey(
@@ -86,6 +87,7 @@ class Lesson(models.Model):
         default=LessonType.YOUTUBE,
     )
     youtube_url = models.URLField(blank=True, null=True)
+    google_drive_url = models.URLField(max_length=500, blank=True, null=True)
     external_url = models.URLField(blank=True, null=True)
     pdf_file = models.FileField(upload_to='lesson_pdfs/', blank=True, null=True)
     notes = models.TextField(blank=True)
@@ -120,6 +122,37 @@ class Lesson(models.Model):
         if video_id:
             return f"https://www.youtube.com/embed/{video_id}"
         return None
+
+    @property
+    def google_drive_embed_url(self):
+        """Converts Google Drive or Docs/Sheets/Slides link into an embeddable preview URL."""
+        if not self.google_drive_url:
+            return None
+        url = self.google_drive_url.strip()
+
+        # Google Docs / Sheets / Presentations
+        docs_match = re.search(r'docs\.google\.com/(document|presentation|spreadsheets)/d/([a-zA-Z0-9_-]+)', url)
+        if docs_match:
+            doc_type = docs_match.group(1)
+            doc_id = docs_match.group(2)
+            return f"https://docs.google.com/{doc_type}/d/{doc_id}/preview"
+
+        # Drive file URL: /file/d/<ID>
+        file_match = re.search(r'drive\.google\.com/file/d/([a-zA-Z0-9_-]+)', url)
+        if file_match:
+            file_id = file_match.group(1)
+            return f"https://drive.google.com/file/d/{file_id}/preview"
+
+        # Drive open?id=<ID> or uc?id=<ID>
+        id_match = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', url)
+        if id_match and 'google.com' in url:
+            file_id = id_match.group(1)
+            return f"https://drive.google.com/file/d/{file_id}/preview"
+
+        if 'preview' in url:
+            return url
+
+        return url
 
     def get_next_lesson(self):
         """Returns the next lesson within the course."""

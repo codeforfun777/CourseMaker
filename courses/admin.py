@@ -11,7 +11,7 @@ class LessonTimestampInline(admin.TabularInline):
 class LessonInline(admin.TabularInline):
     model = Lesson
     extra = 1
-    fields = ('title', 'lesson_type', 'order', 'is_completed', 'youtube_url', 'external_url', 'pdf_file')
+    fields = ('title', 'lesson_type', 'order', 'is_completed', 'youtube_url', 'google_drive_url', 'external_url')
     show_change_link = True
 
 

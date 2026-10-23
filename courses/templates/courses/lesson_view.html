@@ -61,6 +61,10 @@
 <!-- Suppress global site header inside study focus workspace -->
 {% endblock header %}
 
+{% block footer %}
+<!-- Suppress global footer inside full-screen study focus workspace -->
+{% endblock footer %}
+
 {% block content %}
 <div class="flex flex-col flex-1 min-h-screen lg:h-screen bg-slate-50/70 dark:bg-slate-950 lg:overflow-hidden transition-colors">
     <!-- ================= TOP CONSOLIDATED FOCUS NAVBAR ================= -->
@@ -304,6 +308,47 @@
                     </div>
                 </div>
 
+            {% elif lesson.lesson_type == 'DRIVE' %}
+                <!-- Google Drive Document / PDF Reader Card -->
+                <div class="w-full flex-1 flex flex-col min-h-[550px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-sm">
+                    <div class="flex items-center justify-between mb-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400 flex items-center justify-center text-sm font-bold shadow-2xs">
+                                📑
+                            </div>
+                            <div>
+                                <h1 class="text-base font-bold text-slate-900 dark:text-white leading-tight">{{ lesson.title }}</h1>
+                                <span class="text-[11px] text-slate-400">Google Drive Document / PDF Reader</span>
+                            </div>
+                        </div>
+                        {% if lesson.google_drive_url %}
+                        <div class="flex items-center gap-2">
+                            <a href="{{ lesson.google_drive_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition border border-slate-200 dark:border-slate-700">
+                                <span>Open in Drive</span>
+                                <span class="text-xs">↗</span>
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if lesson.google_drive_embed_url %}
+                    <div class="relative w-full flex-1 min-h-[500px] rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                        <iframe 
+                            src="{{ lesson.google_drive_embed_url }}" 
+                            class="w-full h-full min-h-[500px] border-0"
+                            allow="autoplay"
+                            allowfullscreen
+                            title="{{ lesson.title }}">
+                        </iframe>
+                    </div>
+                    {% else %}
+                    <div class="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-400">
+                        <span class="text-4xl mb-2">📑</span>
+                        <p class="font-bold text-slate-700 dark:text-slate-300">No Google Drive link provided</p>
+                        <p class="text-xs text-slate-500 mt-1">Please add a valid Google Drive or Google Docs sharing link to this lesson.</p>
+                    </div>
+                    {% endif %}
+                </div>
+
             {% elif lesson.lesson_type == 'PDF' %}
                 <!-- PDF Document Reader Card -->
                 <div class="w-full flex-1 flex flex-col min-h-[550px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-sm">
@@ -470,7 +515,7 @@
                         <div class="w-full px-3.5 py-2.5 rounded-2xl bg-white dark:bg-slate-850 hover:bg-slate-100/70 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700/60 flex items-center justify-between text-xs transition group">
                             <a href="{% url 'courses:lesson_view' l.pk %}" class="flex items-center gap-2.5 min-w-0 flex-1 pr-2 text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white" title="{{ l.title }}">
                                 <span class="text-xs text-slate-400 shrink-0">
-                                    {% if l.lesson_type == 'YOUTUBE' %}▶{% elif l.lesson_type == 'PDF' %}📄{% else %}🔗{% endif %}
+                                    {% if l.lesson_type == 'YOUTUBE' %}▶{% elif l.lesson_type == 'DRIVE' or l.lesson_type == 'PDF' %}📄{% else %}🔗{% endif %}
                                 </span>
                                 <span class="truncate font-medium">{{ l.title }}</span>
                             </a>

@@ -62,6 +62,33 @@ class CourseModelsTestCase(TestCase):
             lesson = Lesson(youtube_url=url)
             self.assertEqual(lesson.youtube_embed_id, expected_id, f"Failed for {url}")
 
+    def test_google_drive_embed_url(self):
+        variations = [
+            (
+                'https://drive.google.com/file/d/1A2B3C4D5E6F/view?usp=sharing',
+                'https://drive.google.com/file/d/1A2B3C4D5E6F/preview'
+            ),
+            (
+                'https://drive.google.com/open?id=1A2B3C4D5E6F',
+                'https://drive.google.com/file/d/1A2B3C4D5E6F/preview'
+            ),
+            (
+                'https://docs.google.com/document/d/1A2B3C4D5E6F/edit?usp=sharing',
+                'https://docs.google.com/document/d/1A2B3C4D5E6F/preview'
+            ),
+            (
+                'https://docs.google.com/presentation/d/1A2B3C4D5E6F/edit',
+                'https://docs.google.com/presentation/d/1A2B3C4D5E6F/preview'
+            ),
+            (
+                'https://docs.google.com/spreadsheets/d/1A2B3C4D5E6F/edit#gid=0',
+                'https://docs.google.com/spreadsheets/d/1A2B3C4D5E6F/preview'
+            ),
+        ]
+        for url, expected_embed in variations:
+            lesson = Lesson(google_drive_url=url)
+            self.assertEqual(lesson.google_drive_embed_url, expected_embed, f"Failed for {url}")
+
     def test_str_representations(self):
         self.assertEqual(str(self.course), 'CS101: Introduction to Computer Science')
         self.assertEqual(str(self.module1), 'CS101: Introduction to Computer Science - Module 1: Algorithms')
@@ -148,6 +175,30 @@ class CourseViewsTestCase(TestCase):
         self.assertContains(response, 'Hello World in Python')
         self.assertContains(response, 'https://www.youtube.com/embed/kqtD5dpn9C8')
         self.assertContains(response, 'Save Study Notes')
+
+    def test_lesson_create_google_drive_and_view(self):
+        self.client.login(username='alice', password='password123')
+        create_url = reverse('courses:lesson_create', args=[self.module.pk])
+        response = self.client.post(create_url, {
+            'title': 'Operating Systems Lecture Notes',
+            'lesson_type': Lesson.LessonType.DRIVE,
+            'google_drive_url': 'https://drive.google.com/file/d/1A2B3C4D5E6F/view?usp=sharing',
+            'notes': 'Read chapter 3 before next lecture',
+            'order': 2
+        })
+        self.assertEqual(response.status_code, 302)
+        drive_lesson = Lesson.objects.filter(title='Operating Systems Lecture Notes').first()
+        self.assertIsNotNone(drive_lesson)
+        self.assertEqual(drive_lesson.lesson_type, Lesson.LessonType.DRIVE)
+        self.assertEqual(drive_lesson.google_drive_embed_url, 'https://drive.google.com/file/d/1A2B3C4D5E6F/preview')
+
+        # View in study mode
+        view_url = reverse('courses:lesson_view', args=[drive_lesson.pk])
+        view_response = self.client.get(view_url)
+        self.assertEqual(view_response.status_code, 200)
+        self.assertContains(view_response, 'Operating Systems Lecture Notes')
+        self.assertContains(view_response, 'https://drive.google.com/file/d/1A2B3C4D5E6F/preview')
+        self.assertContains(view_response, 'Open in Drive')
 
     def test_lesson_save_notes_ajax(self):
         self.client.login(username='alice', password='password123')

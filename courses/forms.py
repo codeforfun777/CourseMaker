@@ -62,10 +62,11 @@ class ModuleForm(TailwindWidgetMixin, forms.ModelForm):
 class LessonForm(TailwindWidgetMixin, forms.ModelForm):
     class Meta:
         model = Lesson
-        fields = ['title', 'lesson_type', 'youtube_url', 'external_url', 'pdf_file', 'notes', 'order']
+        fields = ['title', 'lesson_type', 'youtube_url', 'google_drive_url', 'external_url', 'notes', 'order']
         widgets = {
             'title': forms.TextInput(attrs={'placeholder': 'e.g. Lecture 1: Big O Notation'}),
             'youtube_url': forms.URLInput(attrs={'placeholder': 'https://www.youtube.com/watch?v=...'}),
+            'google_drive_url': forms.URLInput(attrs={'placeholder': 'https://drive.google.com/file/d/.../view or Google Docs link'}),
             'external_url': forms.URLInput(attrs={'placeholder': 'https://example.com/article'}),
             'notes': forms.Textarea(attrs={'placeholder': 'Initial study notes or key takeaways...'}),
             'order': forms.NumberInput(attrs={'placeholder': '0', 'min': 0}),
@@ -74,6 +75,12 @@ class LessonForm(TailwindWidgetMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.apply_tailwind()
+        # Remove legacy file upload choice and present Google Drive instead
+        self.fields['lesson_type'].choices = [
+            (Lesson.LessonType.YOUTUBE, 'YouTube Video'),
+            (Lesson.LessonType.DRIVE, 'Google Drive Document / PDF'),
+            (Lesson.LessonType.LINK, 'Web Article'),
+        ]
 
 
 class LessonNotesForm(forms.ModelForm):
