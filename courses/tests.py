@@ -276,6 +276,112 @@ class CourseViewsTestCase(TestCase):
         })
         self.assertEqual(response.status_code, 403)
 
+    def test_course_export_view(self):
+        self.client.login(username='alice', password='password123')
+        url = reverse('courses:course_export', args=[self.public_course.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/json; charset=utf-8')
+        data = json.loads(response.content.decode('utf-8'))
+        self.assertEqual(data['title'], 'Public Python Course')
+        self.assertEqual(data['export_type'], 'course')
+        self.assertEqual(len(data['modules']), 1)
+        self.assertEqual(data['modules'][0]['title'], 'Python Basics')
+        self.assertEqual(len(data['modules'][0]['lessons']), 1)
+        self.assertEqual(data['modules'][0]['lessons'][0]['title'], 'Hello World in Python')
+
+    def test_course_export_forbidden_for_non_owner(self):
+        self.client.login(username='bob', password='password123')
+        url = reverse('courses:course_export', args=[self.public_course.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_course_import_view(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.client.login(username='alice', password='password123')
+        payload = {
+            "version": "1.0",
+            "export_type": "course",
+            "title": "Imported Go Track",
+            "description": "Learn Go fast",
+            "modules": [
+                {
+                    "title": "Go Fundamentals",
+                    "order": 1,
+                    "lessons": [
+                        {
+                            "title": "Tour of Go 1",
+                            "lesson_type": "YOUTUBE",
+                            "youtube_url": "https://www.youtube.com/watch?v=YS4e4q9oBaU",
+                            "order": 1,
+                            "timestamps": [
+                                {"time_seconds": 30, "label": "Setup"}
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+        json_file = SimpleUploadedFile(
+            "go_course.json",
+            json.dumps(payload).encode('utf-8'),
+            content_type="application/json"
+        )
+        url = reverse('courses:course_import')
+        response = self.client.post(url, {'course_file': json_file})
+        self.assertEqual(response.status_code, 302)
+        imported_course = Course.objects.filter(user=self.user, title="Imported Go Track").first()
+        self.assertIsNotNone(imported_course)
+        self.assertEqual(imported_course.modules.count(), 1)
+        first_mod = imported_course.modules.first()
+        self.assertEqual(first_mod.title, "Go Fundamentals")
+        self.assertEqual(first_mod.lessons.count(), 1)
+        first_les = first_mod.lessons.first()
+        self.assertEqual(first_les.title, "Tour of Go 1")
+        self.assertEqual(first_les.timestamps.count(), 1)
+        self.assertEqual(first_les.timestamps.first().label, "Setup")
+
+    def test_module_export_view(self):
+        self.client.login(username='alice', password='password123')
+        url = reverse('courses:module_export', args=[self.module.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/json; charset=utf-8')
+        data = json.loads(response.content.decode('utf-8'))
+        self.assertEqual(data['title'], 'Python Basics')
+        self.assertEqual(data['export_type'], 'module')
+        self.assertEqual(len(data['lessons']), 1)
+
+    def test_module_import_view(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.client.login(username='alice', password='password123')
+        payload = {
+            "version": "1.0",
+            "export_type": "module",
+            "title": "Advanced Python Decorators",
+            "order": 2,
+            "lessons": [
+                {
+                    "title": "Understanding Closures",
+                    "lesson_type": "LINK",
+                    "external_url": "https://example.com/closures",
+                    "order": 1
+                }
+            ]
+        }
+        json_file = SimpleUploadedFile(
+            "decorators.json",
+            json.dumps(payload).encode('utf-8'),
+            content_type="application/json"
+        )
+        url = reverse('courses:module_import', args=[self.public_course.pk])
+        response = self.client.post(url, {'module_file': json_file})
+        self.assertEqual(response.status_code, 302)
+        new_mod = self.public_course.modules.filter(title="Advanced Python Decorators").first()
+        self.assertIsNotNone(new_mod)
+        self.assertEqual(new_mod.lessons.count(), 1)
+        self.assertEqual(new_mod.lessons.first().title, "Understanding Closures")
+
 
 class CourseAutomationUtilsTestCase(TestCase):
     def test_extract_youtube_playlist_id(self):

@@ -14,12 +14,16 @@ urlpatterns = [
     path('course/<int:pk>/', views.course_detail, name='course_detail'),
     path('course/<int:pk>/delete/', views.course_delete, name='course_delete'),
     path('course/<int:pk>/toggle-public/', views.course_toggle_public, name='course_toggle_public'),
+    path('course/<int:pk>/export/', views.course_export, name='course_export'),
+    path('course/import/', views.course_import, name='course_import'),
     path('course/ai-generate/', views.generate_ai_syllabus, name='generate_ai_syllabus'),
     path('course/generate-ai-syllabus/', views.generate_ai_syllabus, name='ai_generate_course'),
     path('course/<int:course_pk>/import-playlist/', views.import_youtube_playlist, name='import_youtube_playlist'),
 
     # Modules
     path('course/<int:course_pk>/module/create/', views.module_create, name='module_create'),
+    path('course/<int:course_pk>/module/import/', views.module_import, name='module_import'),
+    path('module/<int:pk>/export/', views.module_export, name='module_export'),
     path('module/<int:pk>/delete/', views.module_delete, name='module_delete'),
 
     # Lessons

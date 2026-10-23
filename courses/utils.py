@@ -465,3 +465,144 @@ def build_algorithmic_syllabus(topic, resources_description, timeline_duration):
 # Backwards compatibility / convenient aliases
 generate_ai_syllabus = generate_ai_course_syllabus
 import_youtube_playlist_data = fetch_youtube_playlist_videos
+
+
+# ==========================================
+# Course & Module JSON Export / Import Utils
+# ==========================================
+
+def serialize_module(module):
+    """
+    Serializes a single Module and its Lessons & Timestamps into a dictionary.
+    """
+    lessons_data = []
+    for lesson in module.lessons.all().order_by('order', 'id'):
+        ts_data = [
+            {
+                'time_seconds': ts.time_seconds,
+                'formatted_time': ts.formatted_time,
+                'label': ts.label
+            }
+            for ts in lesson.timestamps.all().order_by('time_seconds', 'id')
+        ]
+        lessons_data.append({
+            'title': lesson.title,
+            'lesson_type': lesson.lesson_type,
+            'youtube_url': lesson.youtube_url or '',
+            'external_url': lesson.external_url or '',
+            'notes': lesson.notes or '',
+            'is_completed': lesson.is_completed,
+            'order': lesson.order,
+            'timestamps': ts_data
+        })
+
+    return {
+        'version': '1.0',
+        'export_type': 'module',
+        'title': module.title,
+        'order': module.order,
+        'lessons': lessons_data
+    }
+
+
+def serialize_course(course):
+    """
+    Serializes a full Course, all its Modules, Lessons & Timestamps into a dictionary.
+    """
+    modules_data = []
+    for mod in course.modules.all().order_by('order', 'id'):
+        mod_dict = serialize_module(mod)
+        modules_data.append({
+            'title': mod_dict['title'],
+            'order': mod_dict['order'],
+            'lessons': mod_dict['lessons']
+        })
+
+    return {
+        'version': '1.0',
+        'export_type': 'course',
+        'title': course.title,
+        'description': course.description or '',
+        'modules': modules_data
+    }
+
+
+def import_module_from_dict(course, module_data, default_order=None):
+    """
+    Creates a new Module within a given Course from parsed module JSON data.
+    Returns the created Module instance.
+    """
+    from .models import Module, Lesson, LessonTimestamp
+
+    title = module_data.get('title') or 'Imported Module'
+    if default_order is not None:
+        order = default_order
+    else:
+        order = module_data.get('order', 0)
+        if order == 0:
+            order = course.modules.count() + 1
+
+    module = Module.objects.create(
+        course=course,
+        title=title,
+        order=order
+    )
+
+    lessons_data = module_data.get('lessons', [])
+    for l_idx, l_item in enumerate(lessons_data, start=1):
+        l_title = l_item.get('title') or f'Lesson {l_idx}'
+        l_type = l_item.get('lesson_type', Lesson.LessonType.YOUTUBE)
+        if l_type not in dict(Lesson.LessonType.choices):
+            l_type = Lesson.LessonType.YOUTUBE
+
+        l_order = l_item.get('order', l_idx)
+        lesson = Lesson.objects.create(
+            module=module,
+            title=l_title,
+            lesson_type=l_type,
+            youtube_url=l_item.get('youtube_url') or None,
+            external_url=l_item.get('external_url') or None,
+            notes=l_item.get('notes', ''),
+            is_completed=bool(l_item.get('is_completed', False)),
+            order=l_order
+        )
+
+        for ts in l_item.get('timestamps', []):
+            time_sec = ts.get('time_seconds', 0)
+            label = ts.get('label') or 'Bookmark'
+            LessonTimestamp.objects.create(
+                lesson=lesson,
+                time_seconds=time_sec,
+                label=label
+            )
+
+    return module
+
+
+def import_course_from_dict(user, course_data):
+    """
+    Creates a new Course with all Modules and Lessons from parsed course JSON data.
+    Returns the created Course instance.
+    """
+    from .models import Course
+
+    title = course_data.get('title') or 'Imported Course'
+    description = course_data.get('description', '')
+
+    course = Course.objects.create(
+        user=user,
+        title=title,
+        description=description,
+        is_public=False
+    )
+
+    # If it's a single module export imported as a course, wrap it into one module
+    if course_data.get('export_type') == 'module' or ('modules' not in course_data and 'lessons' in course_data):
+        import_module_from_dict(course, course_data, default_order=1)
+    else:
+        modules_data = course_data.get('modules', [])
+        for m_idx, m_item in enumerate(modules_data, start=1):
+            import_module_from_dict(course, m_item, default_order=m_item.get('order', m_idx))
+
+    return course
+

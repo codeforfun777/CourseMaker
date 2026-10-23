@@ -4,14 +4,22 @@ from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.db import models
-from django.http import JsonResponse, HttpResponseForbidden
+from django.http import JsonResponse, HttpResponseForbidden, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
 from .forms import CourseForm, ModuleForm, LessonForm, LessonNotesForm, SignUpForm
 from .models import Course, Module, Lesson, LessonTimestamp
 from .youtube_utils import extract_youtube_chapters, parse_timestamp_lines
-from .utils import generate_ai_course_syllabus, fetch_youtube_playlist_videos
+from .utils import (
+    generate_ai_course_syllabus,
+    fetch_youtube_playlist_videos,
+    serialize_course,
+    serialize_module,
+    import_course_from_dict,
+    import_module_from_dict
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +85,98 @@ def course_delete(request, pk):
     course.delete()
     messages.success(request, f'Course "{title}" was deleted.')
     return redirect('courses:dashboard')
+
+
+@login_required
+def course_export(request, pk):
+    """Exports an entire course including modules, lessons, notes, and timestamps to JSON."""
+    course = get_object_or_404(Course, pk=pk, user=request.user)
+    data = serialize_course(course)
+    course_slug = slugify(course.title) or f"course_{course.pk}"
+    filename = f"{course_slug}.json"
+
+    response = HttpResponse(
+        json.dumps(data, indent=2, ensure_ascii=False),
+        content_type='application/json; charset=utf-8'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+@require_POST
+def course_import(request):
+    """Imports a course from an uploaded JSON file."""
+    uploaded_file = request.FILES.get('course_file')
+    if not uploaded_file:
+        messages.error(request, "Please select a JSON file to import.")
+        return redirect('courses:dashboard')
+
+    try:
+        content = uploaded_file.read().decode('utf-8-sig')
+        course_data = json.loads(content)
+        if not isinstance(course_data, dict):
+            messages.error(request, "Invalid course file format: expected a JSON object.")
+            return redirect('courses:dashboard')
+
+        new_course = import_course_from_dict(request.user, course_data)
+        messages.success(request, f'Course "{new_course.title}" was successfully imported with {new_course.modules.count()} modules!')
+        return redirect('courses:course_detail', pk=new_course.pk)
+    except Exception as e:
+        logger.error(f"Error importing course: {e}")
+        messages.error(request, f"Failed to import course: {str(e)}")
+        return redirect('courses:dashboard')
+
+
+@login_required
+def module_export(request, pk):
+    """Exports a single module and its lessons/timestamps to JSON."""
+    module = get_object_or_404(Module, pk=pk, course__user=request.user)
+    data = serialize_module(module)
+    mod_slug = slugify(module.title) or f"module_{module.pk}"
+    filename = f"{mod_slug}.json"
+
+    response = HttpResponse(
+        json.dumps(data, indent=2, ensure_ascii=False),
+        content_type='application/json; charset=utf-8'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+@require_POST
+def module_import(request, course_pk):
+    """Imports a module from an uploaded JSON file into an existing course."""
+    course = get_object_or_404(Course, pk=course_pk, user=request.user)
+    uploaded_file = request.FILES.get('module_file')
+    if not uploaded_file:
+        messages.error(request, "Please select a JSON module file to import.")
+        return redirect('courses:course_detail', pk=course.pk)
+
+    try:
+        content = uploaded_file.read().decode('utf-8-sig')
+        module_data = json.loads(content)
+        if not isinstance(module_data, dict):
+            messages.error(request, "Invalid module file format: expected a JSON object.")
+            return redirect('courses:course_detail', pk=course.pk)
+
+        # If user uploaded a full course JSON file, import all its modules into this course
+        if module_data.get('export_type') == 'course' and 'modules' in module_data:
+            imported_count = 0
+            for m_item in module_data.get('modules', []):
+                import_module_from_dict(course, m_item)
+                imported_count += 1
+            messages.success(request, f"Imported {imported_count} modules into '{course.title}'!")
+        else:
+            new_module = import_module_from_dict(course, module_data)
+            messages.success(request, f'Module "{new_module.title}" was imported successfully with {new_module.lessons.count()} lessons!')
+
+        return redirect('courses:course_detail', pk=course.pk)
+    except Exception as e:
+        logger.error(f"Error importing module: {e}")
+        messages.error(request, f"Failed to import module: {str(e)}")
+        return redirect('courses:course_detail', pk=course.pk)
 
 
 @login_required
