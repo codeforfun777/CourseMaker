@@ -9,3 +9,16 @@ staticfiles/
 local_settings.py
 .env
 
+# Design mockups and screenshots
+*.png
+*.jpg
+*.jpeg
+*.webp
+
+# Internal prompt specifications
+AI_AND_AUTOMATION.md
+ARCHITECTURE.md
+FRONTEND_VIEWS.md
+PRD.md
+
+
