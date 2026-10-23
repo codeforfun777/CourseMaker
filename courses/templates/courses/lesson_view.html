@@ -3,7 +3,9 @@
 {% block title %}{{ lesson.title }} | Study Workspace{% endblock %}
 
 {% block extra_head %}
-<!-- Prevent vertical bounce on full split-screen on desktop -->
+<!-- Plyr CSS -->
+<link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+<!-- Prevent vertical bounce on full split-screen on desktop & Plyr LMS theme overrides -->
 <style>
     @media (min-width: 1024px) {
         html, body {
@@ -23,46 +25,34 @@
         scrollbar-width: none !important;
     }
 
-    /* Clean Focus Video Mode: 100% True-Fit Native Aspect Ratio (Zero crop, zero zoom, matches YouTube original size) */
-    .crop-clean-focus {
-        transform: none !important;
+    /* Plyr Indigo LMS Theme */
+    :root {
+        --plyr-color-main: #6366f1; /* Indigo-500 */
+        --plyr-video-control-color: #f8fafc;
+        --plyr-video-control-color-hover: #ffffff;
+        --plyr-video-control-background-hover: rgba(99, 102, 241, 0.9);
+        --plyr-control-spacing: 10px;
+        --plyr-control-radius: 8px;
+        --plyr-menu-background: #0f172a; /* Slate-900 */
+        --plyr-menu-color: #f8fafc;
+        --plyr-menu-border-color: #334155;
+        --plyr-tooltip-background: #0f172a;
+        --plyr-tooltip-color: #ffffff;
+        --plyr-font-family: inherit;
     }
 
-    /* Fullscreen container sizing */
-    #video-player-wrapper:fullscreen {
-        max-height: 100vh !important;
-        max-width: 100vw !important;
-        border-radius: 0 !important;
-        border: none !important;
+    #video-player-wrapper .plyr {
         width: 100% !important;
         height: 100% !important;
+        border-radius: 1rem;
     }
-    #video-player-wrapper:-webkit-full-screen {
-        max-height: 100vh !important;
-        max-width: 100vw !important;
-        border-radius: 0 !important;
-        border: none !important;
-        width: 100% !important;
+    .plyr--video {
+        border-radius: 1rem;
+        overflow: hidden;
         height: 100% !important;
     }
-
-    /* Custom Scrubber & Volume Range Styling */
-    input[type=range]#focus-volume-slider::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        height: 10px;
-        width: 10px;
-        border-radius: 50%;
-        background: #ffffff;
-        cursor: pointer;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.5);
-    }
-    input[type=range]#focus-volume-slider::-moz-range-thumb {
-        height: 10px;
-        width: 10px;
-        border-radius: 50%;
-        background: #ffffff;
-        cursor: pointer;
-        border: none;
+    .plyr__video-wrapper {
+        height: 100% !important;
     }
 </style>
 {% endblock %}
@@ -165,248 +155,18 @@
         <section id="left-study-panel" class="lg:w-[63%] w-full flex-none lg:flex-1 lg:h-full min-h-0 flex flex-col lg:overflow-y-auto no-scrollbar space-y-4 pb-12 transition-all duration-200">
             
             {% if lesson.lesson_type == 'YOUTUBE' %}
-                <!-- 1. Pure 16:9 Video Embed Player (Zero inside overlays, Viewport-constrained in Theater Mode) -->
+                <!-- 1. Pure 16:9 Plyr Video Player (Viewport-constrained in Theater Mode) -->
                 <div class="w-full flex justify-center shrink-0">
-                    {% if lesson.youtube_embed_url %}
-                    <div id="video-player-wrapper" class="relative group/player w-full aspect-video max-h-[calc(100vh-13.5rem)] max-w-[calc((100vh-13.5rem)*16/9)] rounded-2xl overflow-hidden bg-black shadow-md border border-slate-200/90 dark:border-slate-800 select-none">
-                        
-                        <!-- Cropper Container: In Clean Focus mode, scales slightly and shifts origin to crop out YouTube title & overlays -->
-                        <div id="yt-iframe-cropper" class="w-full h-full relative overflow-hidden transition-all duration-300 crop-clean-focus">
+                    {% if lesson.youtube_embed_id %}
+                    <div id="video-player-wrapper" class="w-full aspect-video max-h-[calc(100vh-13.5rem)] max-w-[calc((100vh-13.5rem)*16/9)] rounded-2xl overflow-hidden bg-black shadow-md border border-slate-200/90 dark:border-slate-800">
+                        <div class="plyr__video-embed" id="player">
                             <iframe 
-                                id="youtube-player"
-                                class="absolute inset-0 w-full h-full" 
-                                src="{{ lesson.youtube_embed_url }}?enablejsapi=1&origin={{ request.scheme }}://{{ request.get_host }}&rel=0&iv_load_policy=3&modestbranding=1&controls=0&playsinline=1&cc_load_policy=0" 
-                                title="{{ lesson.title }}" 
-                                frameborder="0" 
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-                                referrerpolicy="strict-origin-when-cross-origin"
-                                allowfullscreen>
+                                src="{{ lesson.youtube_embed_url }}?origin={{ request.scheme }}://{{ request.get_host }}&amp;iv_load_policy=3&amp;modestbranding=1&amp;playsinline=1&amp;showinfo=0&amp;rel=0&amp;enablejsapi=1" 
+                                allowfullscreen 
+                                allowtransparency 
+                                allow="autoplay">
                             </iframe>
                         </div>
-
-                        <!-- Transparent Click Overlay (Play/Pause on click, Fullscreen on double-click) -->
-                        <div id="player-click-surface" class="absolute inset-0 z-10 cursor-pointer" onclick="handlePlayerClick(event)" ondblclick="togglePlayerFullscreen(event)"></div>
-
-                        <!-- Center Play / Pause Indicator Overlay (Centered at exact 50% 50% matching YouTube native center button) -->
-                        <div id="player-center-play-btn" onclick="togglePlayPause()" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 flex items-center justify-center cursor-pointer transition-all duration-300">
-                            <div class="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-slate-950/95 hover:bg-slate-900 border-2 border-indigo-500/80 text-white flex items-center justify-center shadow-2xl transform transition-transform hover:scale-110 active:scale-95">
-                                <svg id="center-play-icon" class="w-8 h-8 sm:w-9 sm:h-9 ml-1 text-white fill-current" viewBox="0 0 24 24">
-                                    <path d="M8 5v14l11-7z"/>
-                                </svg>
-                            </div>
-                        </div>
-
-                        <!-- Pause Shield: Completely masks YouTube's "More videos" / next video shelf in the bottom right corner when paused -->
-                        <div id="pause-more-videos-shield" class="absolute bottom-0 right-0 w-44 sm:w-56 h-14 sm:h-16 bg-slate-950/98 pointer-events-none z-25 rounded-tl-xl transition-opacity duration-300 opacity-100 hidden"></div>
-
-                        <!-- Floating Switcher Badge in Native Mode (Visible only when in native mode so user can easily return to Clean Focus) -->
-                        <div id="native-mode-banner" class="absolute top-3 right-3 z-30 hidden">
-                            <button 
-                                type="button" 
-                                onclick="setPlayerMode('clean')" 
-                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/85 hover:bg-slate-900 backdrop-blur-md text-white text-xs font-semibold rounded-xl border border-white/20 shadow-lg transition transform hover:scale-105 cursor-pointer">
-                                <span>✨</span>
-                                <span>Switch to Clean Focus</span>
-                            </button>
-                        </div>
-
-                        <!-- Floating Clean Focus LMS Player Controls (Auto-hides after 2.5s of inactivity while playing) -->
-                        <div id="focus-player-controls" class="absolute bottom-0 inset-x-0 z-30 px-3 sm:px-4 py-2 sm:py-3 bg-gradient-to-t from-black/95 via-black/60 to-transparent transition-opacity duration-300 opacity-100 flex flex-col justify-end space-y-1.5 sm:space-y-2 pointer-events-auto">
-                            
-                            <!-- Custom Progress / Scrub Bar -->
-                            <div id="focus-scrub-container" class="group/scrub relative w-full h-3 sm:h-4 flex items-center cursor-pointer select-none py-1">
-                                <!-- Base Rail -->
-                                <div class="w-full h-1 sm:h-1.5 bg-white/20 rounded-full overflow-hidden relative group-hover/scrub:h-2 sm:group-hover/scrub:h-2.5 transition-all">
-                                    <!-- Buffered Track -->
-                                    <div id="focus-buffer-bar" class="absolute left-0 top-0 h-full bg-white/30 rounded-full transition-all duration-200" style="width: 0%;"></div>
-                                    <!-- Played Track -->
-                                    <div id="focus-progress-bar" class="absolute left-0 top-0 h-full bg-indigo-500 rounded-full" style="width: 0%;"></div>
-                                </div>
-                                <!-- Scrub Handle Thumb -->
-                                <div id="focus-scrub-thumb" class="absolute w-3 h-3 sm:w-3.5 sm:h-3.5 bg-white rounded-full shadow-md -top-0.5 sm:-top-0.5 -ml-1.5 pointer-events-none transform scale-0 group-hover/scrub:scale-100 transition-transform" style="left: 0%;"></div>
-                                <!-- Hover Tooltip -->
-                                <div id="focus-scrub-tooltip" class="absolute -top-7 transform -translate-x-1/2 px-2 py-0.5 bg-slate-900/90 text-white text-[10px] font-mono rounded shadow pointer-events-none hidden whitespace-nowrap border border-white/10">00:00</div>
-                            </div>
-
-                            <!-- Bottom Buttons Row -->
-                            <div class="flex items-center justify-between text-white text-xs select-none">
-                                
-                                <!-- Left Controls: Play/Pause, -10s, +10s, Volume, Time -->
-                                <div class="flex items-center gap-1 sm:gap-2.5 min-w-0">
-                                    <!-- Play/Pause Button -->
-                                    <button 
-                                        type="button" 
-                                        id="focus-play-btn" 
-                                        onclick="togglePlayPause()" 
-                                        class="p-1 sm:p-1.5 text-white/90 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer" 
-                                        title="Play / Pause (Space / K)">
-                                        <svg id="focus-play-icon" class="w-4 h-4 sm:w-5 sm:h-5 fill-current" viewBox="0 0 24 24">
-                                            <path d="M8 5v14l11-7z"/>
-                                        </svg>
-                                    </button>
-
-                                    <!-- Rewind 10s -->
-                                    <button 
-                                        type="button" 
-                                        onclick="seekRelative(-10)" 
-                                        class="p-1 sm:p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer text-[11px] sm:text-xs font-semibold flex items-center gap-0.5" 
-                                        title="Rewind 10s (J / ←)">
-                                        <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.334 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z"/>
-                                        </svg>
-                                        <span class="text-[10px] sm:text-[11px]">10</span>
-                                    </button>
-
-                                    <!-- Forward 10s -->
-                                    <button 
-                                        type="button" 
-                                        onclick="seekRelative(10)" 
-                                        class="p-1 sm:p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer text-[11px] sm:text-xs font-semibold flex items-center gap-0.5" 
-                                        title="Forward 10s (L / →)">
-                                        <span class="text-[10px] sm:text-[11px]">10</span>
-                                        <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.934 12.8a1 1 0 000-1.6l-5.334-4A1 1 0 005 8v8a1 1 0 001.6.8l5.334-4zM19.934 12.8a1 1 0 000-1.6l-5.334-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.334-4z"/>
-                                        </svg>
-                                    </button>
-
-                                    <!-- Volume Toggle & Slider -->
-                                    <div class="flex items-center group/vol">
-                                        <button 
-                                            type="button" 
-                                            id="focus-volume-btn" 
-                                            onclick="toggleMute()" 
-                                            class="p-1 sm:p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer" 
-                                            title="Mute / Unmute (M)">
-                                            <svg id="focus-volume-icon" class="w-4 h-4 sm:w-4.5 sm:h-4.5 fill-current" viewBox="0 0 24 24">
-                                                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-                                            </svg>
-                                        </button>
-                                        <input 
-                                            id="focus-volume-slider" 
-                                            type="range" 
-                                            min="0" 
-                                            max="100" 
-                                            value="100" 
-                                            oninput="setPlayerVolume(this.value)" 
-                                            class="w-12 sm:w-16 h-1 accent-indigo-500 bg-white/20 rounded-lg cursor-pointer ml-1">
-                                    </div>
-
-                                    <!-- Time Display -->
-                                    <div class="text-[10px] sm:text-xs font-mono font-medium text-slate-300 ml-1 whitespace-nowrap">
-                                        <span id="focus-current-time" class="text-white font-semibold">00:00</span>
-                                        <span class="text-slate-400">/</span>
-                                        <span id="focus-duration-time" class="text-slate-400">00:00</span>
-                                    </div>
-                                </div>
-
-                                <!-- Right Controls: Subtitles, Quality, Speed, Mode Switcher, Fullscreen -->
-                                <div class="flex items-center gap-1 sm:gap-1.5 relative">
-                                    
-                                    <!-- Subtitles / CC Toggle Button & Menu -->
-                                    <div class="relative">
-                                        <button 
-                                            type="button" 
-                                            id="focus-cc-btn" 
-                                            onclick="toggleSubtitles(event)" 
-                                            class="px-2 py-1 text-[11px] font-bold text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg transition cursor-pointer tracking-wider" 
-                                            title="Toggle Subtitles / CC (C)">
-                                            <span id="focus-cc-label">CC</span>
-                                        </button>
-
-                                        <!-- Subtitles Menu Popover -->
-                                        <div id="focus-cc-menu" class="absolute bottom-10 right-0 bg-slate-900/95 backdrop-blur-md rounded-xl border border-slate-700/80 shadow-2xl p-1.5 hidden z-40 text-xs min-w-[140px] space-y-0.5 select-none">
-                                            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1 border-b border-slate-800 flex items-center justify-between">
-                                                <span>Subtitles</span>
-                                                <button type="button" onclick="closeAllPlayerMenus(event)" class="text-slate-400 hover:text-white text-xs">&times;</button>
-                                            </div>
-                                            <div id="focus-cc-options" class="max-h-40 overflow-y-auto no-scrollbar space-y-0.5">
-                                                <button type="button" onclick="setCaptionTrack('off')" class="w-full text-left px-2 py-1 rounded hover:bg-slate-800 text-slate-200 flex items-center justify-between transition cursor-pointer">
-                                                    <span>Off</span>
-                                                    <span id="cc-check-off" class="text-indigo-400 font-bold">✓</span>
-                                                </button>
-                                                <button type="button" onclick="setCaptionTrack('en')" class="w-full text-left px-2 py-1 rounded hover:bg-slate-800 text-slate-200 flex items-center justify-between transition cursor-pointer">
-                                                    <span>English</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Quality Selector Button & Menu -->
-                                    <div class="relative">
-                                        <button 
-                                            type="button" 
-                                            id="focus-quality-btn" 
-                                            onclick="toggleQualityMenu(event)" 
-                                            class="px-2 py-1 text-[11px] font-semibold text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg transition cursor-pointer" 
-                                            title="Playback Quality">
-                                            <span id="focus-quality-label">Auto</span>
-                                        </button>
-
-                                        <!-- Quality Menu Popover -->
-                                        <div id="focus-quality-menu" class="absolute bottom-10 right-0 bg-slate-900/95 backdrop-blur-md rounded-xl border border-slate-700/80 shadow-2xl p-1.5 hidden z-40 text-xs min-w-[130px] space-y-0.5 select-none">
-                                            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1 border-b border-slate-800 flex items-center justify-between">
-                                                <span>Quality</span>
-                                                <button type="button" onclick="closeAllPlayerMenus(event)" class="text-slate-400 hover:text-white text-xs">&times;</button>
-                                            </div>
-                                            <div id="focus-quality-options" class="max-h-40 overflow-y-auto no-scrollbar space-y-0.5">
-                                                <button type="button" onclick="setPlayerQuality('auto')" class="w-full text-left px-2 py-1 rounded hover:bg-slate-800 text-slate-200 flex items-center justify-between transition cursor-pointer">
-                                                    <span>Auto</span>
-                                                    <span class="text-indigo-400 font-bold">✓</span>
-                                                </button>
-                                                <button type="button" onclick="setPlayerQuality('hd1080')" class="w-full text-left px-2 py-1 rounded hover:bg-slate-800 text-slate-200 flex items-center justify-between transition cursor-pointer">
-                                                    <span>1080p HD</span>
-                                                </button>
-                                                <button type="button" onclick="setPlayerQuality('hd720')" class="w-full text-left px-2 py-1 rounded hover:bg-slate-800 text-slate-200 flex items-center justify-between transition cursor-pointer">
-                                                    <span>720p HD</span>
-                                                </button>
-                                                <button type="button" onclick="setPlayerQuality('large')" class="w-full text-left px-2 py-1 rounded hover:bg-slate-800 text-slate-200 flex items-center justify-between transition cursor-pointer">
-                                                    <span>480p</span>
-                                                </button>
-                                                <button type="button" onclick="setPlayerQuality('medium')" class="w-full text-left px-2 py-1 rounded hover:bg-slate-800 text-slate-200 flex items-center justify-between transition cursor-pointer">
-                                                    <span>360p</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Speed Button -->
-                                    <button 
-                                        type="button" 
-                                        id="focus-speed-btn" 
-                                        onclick="cyclePlaybackSpeed()" 
-                                        class="px-2 py-1 text-[11px] font-semibold text-white/90 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg transition cursor-pointer" 
-                                        title="Playback Speed">
-                                        <span id="focus-speed-label">1x</span>
-                                    </button>
-
-                                    <!-- Mode Switcher Pill -->
-                                    <button 
-                                        type="button" 
-                                        id="player-mode-toggle-btn" 
-                                        onclick="togglePlayerMode()" 
-                                        class="hidden xs:inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-indigo-300 bg-indigo-950/70 hover:bg-indigo-900/80 border border-indigo-500/30 rounded-lg transition cursor-pointer shadow-2xs" 
-                                        title="Switch to Native YouTube Mode">
-                                        <span>✨</span>
-                                        <span class="hidden sm:inline">Clean</span>
-                                        <span>Focus</span>
-                                    </button>
-
-                                    <!-- Fullscreen Toggle -->
-                                    <button 
-                                        type="button" 
-                                        id="focus-fullscreen-btn" 
-                                        onclick="togglePlayerFullscreen()" 
-                                        class="p-1 sm:p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer" 
-                                        title="Toggle Fullscreen (F)">
-                                        <svg id="focus-fullscreen-icon" class="w-4 h-4 sm:w-4.5 sm:h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0 0l-5-5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
-                                        </svg>
-                                    </button>
-                                </div>
-
-                            </div>
-                        </div>
-
                     </div>
                     {% else %}
                     <!-- Video Embed Fallback -->
@@ -857,6 +617,8 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Plyr JS CDN -->
+<script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
 <script>
     const lessonId = "{{ lesson.pk }}";
     const saveNotesUrl = "{% url 'courses:lesson_save_notes' lesson.pk %}";
@@ -873,730 +635,82 @@
 
     let isDirty = false;
 
-    // ================= CLEAN FOCUS LMS PLAYER STATE & API BRIDGE =================
-    let ytPlayer = null;
-    let ytReady = false;
-    let isCleanMode = true;
-    let currentPlaybackRate = 1.0;
-    let previousVolume = 100;
-    let controlsTimeout = null;
-    let isScrubbing = false;
-    let progressUpdateTimer = null;
-    const speedOptions = [1.0, 1.25, 1.5, 1.75, 2.0, 0.75];
+    // ================= PLYR MEDIA PLAYER INTEGRATION =================
+    let plyrPlayer = null;
 
-    (function loadYouTubeApi() {
-        if (window.YT && window.YT.Player) {
-            onYouTubeIframeAPIReady();
-            return;
-        }
-        const tag = document.createElement('script');
-        tag.src = "https://www.youtube.com/iframe_api";
-        const firstScriptTag = document.getElementsByTagName('script')[0];
-        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-    })();
+    function initPlyrPlayer() {
+        const playerEl = document.getElementById('player');
+        if (!playerEl) return;
 
-    window.onYouTubeIframeAPIReady = function() {
-        const iframe = document.getElementById('youtube-player');
-        if (iframe) {
-            ytPlayer = new YT.Player('youtube-player', {
-                events: {
-                    'onReady': onPlayerReady,
-                    'onStateChange': onPlayerStateChange,
-                    'onPlaybackQualityChange': onPlaybackQualityChange
+        try {
+            plyrPlayer = new Plyr('#player', {
+                controls: [
+                    'play-large',
+                    'restart',
+                    'rewind',
+                    'play',
+                    'fast-forward',
+                    'progress',
+                    'current-time',
+                    'duration',
+                    'mute',
+                    'volume',
+                    'captions',
+                    'settings',
+                    'pip',
+                    'fullscreen'
+                ],
+                settings: ['captions', 'quality', 'speed'],
+                seekTime: 10,
+                invertTime: false,
+                keyboard: { focused: true, global: false },
+                tooltips: { controls: true, seek: true },
+                youtube: {
+                    noCookie: false,
+                    rel: 0,
+                    showinfo: 0,
+                    iv_load_policy: 3,
+                    modestbranding: 1
                 }
             });
-        }
-    };
 
-    function onPlayerReady(event) {
-        ytReady = true;
-        applyInitialPlayerMode();
-        startProgressTracking();
-        startChapterTracking();
-        initScrubBar();
-        initControlsVisibility();
-        initCaptions();
-        updateAvailableQuality();
+            window.plyrPlayer = plyrPlayer;
 
-        if (ytPlayer && typeof ytPlayer.getVolume === 'function') {
-            const vol = ytPlayer.getVolume();
-            const slider = document.getElementById('focus-volume-slider');
-            if (slider && vol !== undefined) slider.value = vol;
-            updateVolumeIcon(vol);
-        }
-    }
-
-    function onPlayerStateChange(event) {
-        const centerBtn = document.getElementById('player-center-play-btn');
-        const centerIcon = document.getElementById('center-play-icon');
-        const playBtn = document.getElementById('focus-play-btn');
-        const playIcon = document.getElementById('focus-play-icon');
-        const controls = document.getElementById('focus-player-controls');
-        const shield = document.getElementById('pause-more-videos-shield');
-
-        // YT.PlayerState.PLAYING = 1
-        if (event.data === 1) {
-            if (centerBtn) {
-                centerBtn.classList.add('opacity-0', 'pointer-events-none');
-            }
-            if (playIcon) {
-                playIcon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`;
-            }
-            if (centerIcon) {
-                centerIcon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`;
-            }
-            if (playBtn) playBtn.title = "Pause (Space / K)";
-            if (shield) shield.classList.add('hidden');
-            
-            updateAvailableCaptions();
-            updateAvailableQuality();
-            scheduleControlsHide();
-        } 
-        // YT.PlayerState.PAUSED = 2, ENDED = 0, CUED = 5, UNSTARTED = -1
-        else {
-            if (centerBtn && isCleanMode) {
-                centerBtn.classList.remove('opacity-0', 'pointer-events-none');
-            }
-            if (playIcon) {
-                playIcon.innerHTML = `<path d="M8 5v14l11-7z"/>`;
-            }
-            if (centerIcon) {
-                centerIcon.innerHTML = `<path d="M8 5v14l11-7z"/>`;
-            }
-            if (playBtn) playBtn.title = "Play (Space / K)";
-            if (controls) {
-                controls.classList.remove('opacity-0', 'pointer-events-none');
-                controls.classList.add('opacity-100');
-            }
-            if (shield && isCleanMode) shield.classList.remove('hidden');
-            if (controlsTimeout) clearTimeout(controlsTimeout);
-        }
-    }
-
-    // ================= SUBTITLES / CLOSED CAPTIONS =================
-    let captionsEnabled = false;
-    let currentCaptionLang = 'off';
-    let availableCaptionTracks = [];
-
-    function initCaptions() {
-        if (ytPlayer && typeof ytPlayer.loadModule === 'function') {
-            try { ytPlayer.loadModule('captions'); } catch(e){}
-        }
-        const savedCc = localStorage.getItem('workspace_player_cc');
-        if (savedCc && savedCc !== 'off') {
-            setCaptionTrack(savedCc);
-        } else {
-            updateCcButtonUI(false);
-        }
-    }
-
-    function updateAvailableCaptions() {
-        if (!ytPlayer || typeof ytPlayer.getOption !== 'function') return;
-        try {
-            const tracklist = ytPlayer.getOption('captions', 'tracklist');
-            if (Array.isArray(tracklist) && tracklist.length > 0) {
-                availableCaptionTracks = tracklist;
-                renderCaptionMenu();
-            }
-        } catch (err) {}
-    }
-
-    function renderCaptionMenu() {
-        const container = document.getElementById('focus-cc-options');
-        if (!container) return;
-
-        let html = `
-            <button type="button" onclick="setCaptionTrack('off')" class="w-full text-left px-2 py-1 rounded hover:bg-slate-800 text-slate-200 flex items-center justify-between transition cursor-pointer ${currentCaptionLang === 'off' ? 'bg-slate-800/80 font-bold text-indigo-400' : ''}">
-                <span>Off</span>
-                ${currentCaptionLang === 'off' ? '<span class="text-indigo-400 font-bold">✓</span>' : ''}
-            </button>
-        `;
-
-        if (availableCaptionTracks.length > 0) {
-            availableCaptionTracks.forEach(tr => {
-                const code = tr.languageCode || 'en';
-                const name = tr.displayName || tr.name || code.toUpperCase();
-                const isSel = (currentCaptionLang === code);
-                html += `
-                    <button type="button" onclick="setCaptionTrack('${escapeHtml(code)}')" class="w-full text-left px-2 py-1 rounded hover:bg-slate-800 text-slate-200 flex items-center justify-between transition cursor-pointer ${isSel ? 'bg-slate-800/80 font-bold text-indigo-400' : ''}">
-                        <span class="truncate">${escapeHtml(name)}</span>
-                        ${isSel ? '<span class="text-indigo-400 font-bold">✓</span>' : ''}
-                    </button>
-                `;
+            plyrPlayer.on('timeupdate', () => {
+                checkActiveChapter();
             });
-        } else {
-            const isEn = (currentCaptionLang === 'en');
-            html += `
-                <button type="button" onclick="setCaptionTrack('en')" class="w-full text-left px-2 py-1 rounded hover:bg-slate-800 text-slate-200 flex items-center justify-between transition cursor-pointer ${isEn ? 'bg-slate-800/80 font-bold text-indigo-400' : ''}">
-                    <span>English</span>
-                    ${isEn ? '<span class="text-indigo-400 font-bold">✓</span>' : ''}
-                </button>
-            `;
-        }
 
-        container.innerHTML = html;
-    }
-
-    function setCaptionTrack(langCode) {
-        if (!ytPlayer) return;
-        if (typeof ytPlayer.loadModule === 'function') {
-            try { ytPlayer.loadModule('captions'); } catch(e){}
-        }
-
-        if (!langCode || langCode === 'off') {
-            captionsEnabled = false;
-            currentCaptionLang = 'off';
-            if (typeof ytPlayer.setOption === 'function') {
-                try { ytPlayer.setOption('captions', 'track', {}); } catch(e){}
-            }
-            if (typeof ytPlayer.unloadModule === 'function') {
-                try { ytPlayer.unloadModule('captions'); } catch(e){}
-            }
-            updateCcButtonUI(false);
-            localStorage.setItem('workspace_player_cc', 'off');
-        } else {
-            captionsEnabled = true;
-            currentCaptionLang = langCode;
-            if (typeof ytPlayer.setOption === 'function') {
-                try { ytPlayer.setOption('captions', 'track', { languageCode: langCode }); } catch(e){}
-            }
-            updateCcButtonUI(true, langCode);
-            localStorage.setItem('workspace_player_cc', langCode);
-        }
-        renderCaptionMenu();
-        closeAllPlayerMenus();
-    }
-
-    function updateCcButtonUI(active, lang) {
-        const btn = document.getElementById('focus-cc-btn');
-        if (!btn) return;
-        if (active) {
-            btn.className = "px-2 py-1 text-[11px] font-bold text-indigo-300 bg-indigo-900/80 border border-indigo-500/50 rounded-lg transition cursor-pointer tracking-wider shadow-2xs";
-            btn.title = `Subtitles: ON (${lang || 'English'}) - Click to toggle`;
-        } else {
-            btn.className = "px-2 py-1 text-[11px] font-bold text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg transition cursor-pointer tracking-wider";
-            btn.title = 'Subtitles: OFF - Click to toggle (C)';
-        }
-    }
-
-    function toggleSubtitles(event) {
-        if (event) event.stopPropagation();
-        if (availableCaptionTracks.length > 1) {
-            toggleCcMenu(event);
-            return;
-        }
-        if (captionsEnabled) {
-            setCaptionTrack('off');
-        } else {
-            const defaultLang = (availableCaptionTracks.length > 0 && availableCaptionTracks[0].languageCode) ? availableCaptionTracks[0].languageCode : 'en';
-            setCaptionTrack(defaultLang);
-        }
-    }
-
-    // ================= VIDEO QUALITY =================
-    let currentQuality = 'auto';
-    let availableQualityLevels = [];
-    const qualityLabels = {
-        'highres': '4K / HighRes',
-        'hd2160': '4K (2160p)',
-        'hd1440': '1440p (2K)',
-        'hd1080': '1080p HD',
-        'hd720': '720p HD',
-        'large': '480p',
-        'medium': '360p',
-        'small': '240p',
-        'tiny': '144p',
-        'auto': 'Auto'
-    };
-
-    function updateAvailableQuality() {
-        if (!ytPlayer || typeof ytPlayer.getAvailableQualityLevels !== 'function') return;
-        try {
-            const levels = ytPlayer.getAvailableQualityLevels();
-            if (Array.isArray(levels) && levels.length > 0) {
-                availableQualityLevels = levels;
-                renderQualityMenu();
-            }
-            if (typeof ytPlayer.getPlaybackQuality === 'function') {
-                const activeQ = ytPlayer.getPlaybackQuality();
-                if (activeQ && currentQuality === 'auto') {
-                    updateQualityButtonUI('auto', activeQ);
+            plyrPlayer.on('ended', () => {
+                const topBtn = document.getElementById('toggle-complete-btn');
+                const topText = document.getElementById('complete-text');
+                if (topBtn && topText && topText.textContent.trim() === 'Complete Lesson') {
+                    toggleCompletion();
                 }
+            });
+
+            // Restore saved playback speed
+            const savedSpeed = localStorage.getItem('workspace_player_speed');
+            if (savedSpeed && plyrPlayer) {
+                plyrPlayer.speed = parseFloat(savedSpeed);
             }
-        } catch(e){}
-    }
-
-    function renderQualityMenu() {
-        const container = document.getElementById('focus-quality-options');
-        if (!container) return;
-
-        const levelsToShow = (availableQualityLevels.length > 0) 
-            ? ['auto', ...availableQualityLevels.filter(q => q !== 'auto')]
-            : ['auto', 'hd1080', 'hd720', 'large', 'medium', 'small'];
-
-        let html = '';
-        levelsToShow.forEach(q => {
-            const name = qualityLabels[q] || q.toUpperCase();
-            const isSel = (currentQuality === q);
-            html += `
-                <button type="button" onclick="setPlayerQuality('${escapeHtml(q)}')" class="w-full text-left px-2 py-1 rounded hover:bg-slate-800 text-slate-200 flex items-center justify-between transition cursor-pointer ${isSel ? 'bg-slate-800/80 font-bold text-indigo-400' : ''}">
-                    <span>${escapeHtml(name)}</span>
-                    ${isSel ? '<span class="text-indigo-400 font-bold">✓</span>' : ''}
-                </button>
-            `;
-        });
-        container.innerHTML = html;
-    }
-
-    function setPlayerQuality(level) {
-        if (!ytPlayer) return;
-        currentQuality = level;
-        if (typeof ytPlayer.setPlaybackQuality === 'function') {
-            ytPlayer.setPlaybackQuality(level);
-        }
-        updateQualityButtonUI(level);
-        renderQualityMenu();
-        closeAllPlayerMenus();
-        localStorage.setItem('workspace_player_quality', level);
-    }
-
-    function updateQualityButtonUI(level, activeFallback) {
-        const label = document.getElementById('focus-quality-label');
-        if (!label) return;
-        if (level === 'auto') {
-            if (activeFallback) {
-                const shortMap = {
-                    'hd1080': '1080p',
-                    'hd720': '720p',
-                    'large': '480p',
-                    'medium': '360p',
-                    'small': '240p'
-                };
-                label.textContent = shortMap[activeFallback] || 'Auto';
-            } else {
-                label.textContent = 'Auto';
-            }
-        } else {
-            const shortMap = {
-                'highres': '4K',
-                'hd2160': '4K',
-                'hd1440': '2K',
-                'hd1080': '1080p',
-                'hd720': '720p',
-                'large': '480p',
-                'medium': '360p',
-                'small': '240p',
-                'tiny': '144p'
-            };
-            label.textContent = shortMap[level] || 'HD';
-        }
-    }
-
-    function onPlaybackQualityChange(event) {
-        if (currentQuality === 'auto' && event && event.data) {
-            updateQualityButtonUI('auto', event.data);
-        }
-    }
-
-    // ================= MENU TOGGLES =================
-    function toggleQualityMenu(event) {
-        if (event) event.stopPropagation();
-        const menu = document.getElementById('focus-quality-menu');
-        const ccMenu = document.getElementById('focus-cc-menu');
-        if (ccMenu) ccMenu.classList.add('hidden');
-        if (menu) menu.classList.toggle('hidden');
-    }
-
-    function toggleCcMenu(event) {
-        if (event) event.stopPropagation();
-        const menu = document.getElementById('focus-cc-menu');
-        const qMenu = document.getElementById('focus-quality-menu');
-        if (qMenu) qMenu.classList.add('hidden');
-        if (menu) menu.classList.toggle('hidden');
-    }
-
-    function closeAllPlayerMenus(event) {
-        if (event && event.stopPropagation) event.stopPropagation();
-        const qMenu = document.getElementById('focus-quality-menu');
-        const ccMenu = document.getElementById('focus-cc-menu');
-        if (qMenu) qMenu.classList.add('hidden');
-        if (ccMenu) ccMenu.classList.add('hidden');
-    }
-
-    function togglePlayPause() {
-        if (!ytPlayer || !ytReady) return;
-        const state = (typeof ytPlayer.getPlayerState === 'function') ? ytPlayer.getPlayerState() : -1;
-        if (state === 1) {
-            ytPlayer.pauseVideo();
-        } else {
-            ytPlayer.playVideo();
-        }
-    }
-
-    function handlePlayerClick(event) {
-        if (event) event.stopPropagation();
-        closeAllPlayerMenus();
-        togglePlayPause();
-    }
-
-    function seekRelative(deltaSeconds) {
-        if (!ytPlayer || !ytReady) return;
-        const current = getCurrentVideoSeconds();
-        const duration = (typeof ytPlayer.getDuration === 'function') ? ytPlayer.getDuration() : 0;
-        let target = current + deltaSeconds;
-        if (target < 0) target = 0;
-        if (duration > 0 && target > duration) target = duration;
-        ytPlayer.seekTo(target, true);
-        updateFocusPlayerProgress();
-    }
-
-    function cyclePlaybackSpeed() {
-        if (!ytPlayer || !ytReady) return;
-        let idx = speedOptions.indexOf(currentPlaybackRate);
-        if (idx === -1 || idx >= speedOptions.length - 1) {
-            idx = 0;
-        } else {
-            idx++;
-        }
-        currentPlaybackRate = speedOptions[idx];
-        if (typeof ytPlayer.setPlaybackRate === 'function') {
-            ytPlayer.setPlaybackRate(currentPlaybackRate);
-        }
-        const label = document.getElementById('focus-speed-label');
-        if (label) label.textContent = `${currentPlaybackRate}x`;
-    }
-
-    function toggleMute() {
-        if (!ytPlayer || !ytReady) return;
-        const slider = document.getElementById('focus-volume-slider');
-        if (typeof ytPlayer.isMuted === 'function' && ytPlayer.isMuted()) {
-            ytPlayer.unMute();
-            const vol = previousVolume || 80;
-            ytPlayer.setVolume(vol);
-            if (slider) slider.value = vol;
-            updateVolumeIcon(vol);
-        } else {
-            if (typeof ytPlayer.getVolume === 'function') {
-                previousVolume = ytPlayer.getVolume();
-            }
-            ytPlayer.mute();
-            if (slider) slider.value = 0;
-            updateVolumeIcon(0);
-        }
-    }
-
-    function setPlayerVolume(val) {
-        if (!ytPlayer || !ytReady) return;
-        val = parseInt(val, 10);
-        if (val === 0) {
-            ytPlayer.mute();
-        } else {
-            if (typeof ytPlayer.isMuted === 'function' && ytPlayer.isMuted()) {
-                ytPlayer.unMute();
-            }
-            ytPlayer.setVolume(val);
-            previousVolume = val;
-        }
-        updateVolumeIcon(val);
-    }
-
-    function updateVolumeIcon(val) {
-        const icon = document.getElementById('focus-volume-icon');
-        if (!icon) return;
-        if (val === 0) {
-            icon.innerHTML = `<path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>`;
-        } else if (val < 50) {
-            icon.innerHTML = `<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>`;
-        } else {
-            icon.innerHTML = `<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>`;
-        }
-    }
-
-    function togglePlayerFullscreen(event) {
-        if (event) event.stopPropagation();
-        const wrapper = document.getElementById('video-player-wrapper');
-        if (!wrapper) return;
-        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-            if (wrapper.requestFullscreen) {
-                wrapper.requestFullscreen();
-            } else if (wrapper.webkitRequestFullscreen) {
-                wrapper.webkitRequestFullscreen();
-            }
-        } else {
-            if (document.exitFullscreen) {
-                document.exitFullscreen();
-            } else if (document.webkitExitFullscreen) {
-                document.webkitExitFullscreen();
-            }
-        }
-    }
-
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    function handleFullscreenChange() {
-        const fsIcon = document.getElementById('focus-fullscreen-icon');
-        if (!fsIcon) return;
-        if (document.fullscreenElement || document.webkitFullscreenElement) {
-            fsIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>`;
-        } else {
-            fsIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0 0l-5-5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>`;
-        }
-    }
-
-    function updateFocusPlayerProgress() {
-        if (!ytPlayer || !ytReady || isScrubbing) return;
-        const current = (typeof ytPlayer.getCurrentTime === 'function') ? ytPlayer.getCurrentTime() : 0;
-        const duration = (typeof ytPlayer.getDuration === 'function') ? ytPlayer.getDuration() : 0;
-        const loadedFrac = (typeof ytPlayer.getVideoLoadedFraction === 'function') ? ytPlayer.getVideoLoadedFraction() : 0;
-
-        const currentEl = document.getElementById('focus-current-time');
-        const durationEl = document.getElementById('focus-duration-time');
-        const progressBar = document.getElementById('focus-progress-bar');
-        const bufferBar = document.getElementById('focus-buffer-bar');
-        const thumb = document.getElementById('focus-scrub-thumb');
-
-        if (currentEl) currentEl.textContent = formatSeconds(Math.floor(current));
-        if (durationEl && duration > 0) durationEl.textContent = formatSeconds(Math.floor(duration));
-
-        if (duration > 0) {
-            const percent = Math.min(100, Math.max(0, (current / duration) * 100));
-            if (progressBar) progressBar.style.width = `${percent}%`;
-            if (thumb) thumb.style.left = `${percent}%`;
-        }
-        if (bufferBar) bufferBar.style.width = `${Math.min(100, loadedFrac * 100)}%`;
-    }
-
-    function startProgressTracking() {
-        if (progressUpdateTimer) clearInterval(progressUpdateTimer);
-        progressUpdateTimer = setInterval(updateFocusPlayerProgress, 250);
-    }
-
-    function initScrubBar() {
-        const scrubContainer = document.getElementById('focus-scrub-container');
-        const tooltip = document.getElementById('focus-scrub-tooltip');
-        if (!scrubContainer) return;
-
-        function getFractionFromPos(clientX) {
-            const rect = scrubContainer.getBoundingClientRect();
-            const pos = (clientX - rect.left) / rect.width;
-            return Math.max(0, Math.min(1, pos));
-        }
-
-        scrubContainer.addEventListener('mousemove', (e) => {
-            const fraction = getFractionFromPos(e.clientX);
-            const duration = (ytPlayer && typeof ytPlayer.getDuration === 'function') ? ytPlayer.getDuration() : 0;
-            if (tooltip && duration > 0) {
-                tooltip.textContent = formatSeconds(Math.floor(fraction * duration));
-                tooltip.style.left = `${fraction * 100}%`;
-                tooltip.classList.remove('hidden');
-            }
-        });
-
-        scrubContainer.addEventListener('mouseleave', () => {
-            if (tooltip && !isScrubbing) {
-                tooltip.classList.add('hidden');
-            }
-        });
-
-        scrubContainer.addEventListener('mousedown', (e) => {
-            isScrubbing = true;
-            const fraction = getFractionFromPos(e.clientX);
-            const duration = (ytPlayer && typeof ytPlayer.getDuration === 'function') ? ytPlayer.getDuration() : 0;
-            if (duration > 0 && ytPlayer && typeof ytPlayer.seekTo === 'function') {
-                ytPlayer.seekTo(fraction * duration, true);
-                updateFocusPlayerProgress();
-            }
-
-            function onMouseMove(moveEvent) {
-                if (!isScrubbing) return;
-                const moveFrac = getFractionFromPos(moveEvent.clientX);
-                if (duration > 0) {
-                    const progBar = document.getElementById('focus-progress-bar');
-                    const thumb = document.getElementById('focus-scrub-thumb');
-                    if (progBar) progBar.style.width = `${moveFrac * 100}%`;
-                    if (thumb) thumb.style.left = `${moveFrac * 100}%`;
-                    if (tooltip) {
-                        tooltip.textContent = formatSeconds(Math.floor(moveFrac * duration));
-                        tooltip.style.left = `${moveFrac * 100}%`;
-                    }
+            plyrPlayer.on('ratechange', () => {
+                if (plyrPlayer && plyrPlayer.speed) {
+                    localStorage.setItem('workspace_player_speed', plyrPlayer.speed);
                 }
-            }
+            });
 
-            function onMouseUp(upEvent) {
-                if (isScrubbing) {
-                    isScrubbing = false;
-                    const upFrac = getFractionFromPos(upEvent.clientX);
-                    if (duration > 0 && ytPlayer && typeof ytPlayer.seekTo === 'function') {
-                        ytPlayer.seekTo(upFrac * duration, true);
-                        updateFocusPlayerProgress();
-                    }
-                    if (tooltip) tooltip.classList.add('hidden');
-                }
-                window.removeEventListener('mousemove', onMouseMove);
-                window.removeEventListener('mouseup', onMouseUp);
-            }
-
-            window.addEventListener('mousemove', onMouseMove);
-            window.addEventListener('mouseup', onMouseUp);
-        });
-
-        scrubContainer.addEventListener('touchstart', (e) => {
-            if (e.touches && e.touches[0]) {
-                isScrubbing = true;
-                const frac = getFractionFromPos(e.touches[0].clientX);
-                const duration = (ytPlayer && typeof ytPlayer.getDuration === 'function') ? ytPlayer.getDuration() : 0;
-                if (duration > 0 && ytPlayer && typeof ytPlayer.seekTo === 'function') {
-                    ytPlayer.seekTo(frac * duration, true);
-                    updateFocusPlayerProgress();
-                }
-            }
-        }, { passive: true });
-
-        scrubContainer.addEventListener('touchmove', (e) => {
-            if (isScrubbing && e.touches && e.touches[0]) {
-                const frac = getFractionFromPos(e.touches[0].clientX);
-                const duration = (ytPlayer && typeof ytPlayer.getDuration === 'function') ? ytPlayer.getDuration() : 0;
-                if (duration > 0) {
-                    const progBar = document.getElementById('focus-progress-bar');
-                    const thumb = document.getElementById('focus-scrub-thumb');
-                    if (progBar) progBar.style.width = `${frac * 100}%`;
-                    if (thumb) thumb.style.left = `${frac * 100}%`;
-                }
-            }
-        }, { passive: true });
-
-        scrubContainer.addEventListener('touchend', () => {
-            isScrubbing = false;
-        });
-    }
-
-    function scheduleControlsHide() {
-        if (controlsTimeout) clearTimeout(controlsTimeout);
-        const controls = document.getElementById('focus-player-controls');
-        const wrapper = document.getElementById('video-player-wrapper');
-        if (!controls || !wrapper) return;
-
-        if (ytPlayer && ytReady && typeof ytPlayer.getPlayerState === 'function' && ytPlayer.getPlayerState() === 1 && isCleanMode) {
-            controlsTimeout = setTimeout(() => {
-                if (!isScrubbing) {
-                    controls.classList.remove('opacity-100');
-                    controls.classList.add('opacity-0', 'pointer-events-none');
-                    wrapper.classList.add('cursor-none');
-                }
-            }, 2500);
+        } catch (e) {
+            console.error('Plyr initialization error:', e);
         }
     }
 
-    function initControlsVisibility() {
-        const wrapper = document.getElementById('video-player-wrapper');
-        const controls = document.getElementById('focus-player-controls');
-        if (!wrapper || !controls) return;
-
-        function showControls() {
-            controls.classList.remove('opacity-0', 'pointer-events-none');
-            controls.classList.add('opacity-100');
-            wrapper.classList.remove('cursor-none');
-            scheduleControlsHide();
-        }
-
-        wrapper.addEventListener('mousemove', showControls);
-        wrapper.addEventListener('mouseenter', showControls);
-        wrapper.addEventListener('mouseleave', () => {
-            if (ytPlayer && ytReady && typeof ytPlayer.getPlayerState === 'function' && ytPlayer.getPlayerState() === 1 && isCleanMode && !isScrubbing) {
-                controls.classList.remove('opacity-100');
-                controls.classList.add('opacity-0', 'pointer-events-none');
-            }
-        });
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initPlyrPlayer);
+    } else {
+        initPlyrPlayer();
     }
 
-    function applyPlayerMode(mode) {
-        isCleanMode = (mode !== 'native');
-        localStorage.setItem('workspace_player_mode', isCleanMode ? 'clean' : 'native');
-
-        const cropper = document.getElementById('yt-iframe-cropper');
-        const clickSurface = document.getElementById('player-click-surface');
-        const centerBtn = document.getElementById('player-center-play-btn');
-        const focusControls = document.getElementById('focus-player-controls');
-        const nativeBanner = document.getElementById('native-mode-banner');
-        const modeBtn = document.getElementById('player-mode-toggle-btn');
-
-        const shield = document.getElementById('pause-more-videos-shield');
-
-        if (isCleanMode) {
-            if (cropper) cropper.classList.add('crop-clean-focus');
-            if (clickSurface) {
-                clickSurface.classList.remove('hidden', 'pointer-events-none');
-            }
-            if (focusControls) {
-                focusControls.classList.remove('hidden');
-                focusControls.classList.remove('opacity-0');
-                focusControls.classList.add('opacity-100');
-            }
-            if (nativeBanner) nativeBanner.classList.add('hidden');
-            const state = (ytPlayer && typeof ytPlayer.getPlayerState === 'function') ? ytPlayer.getPlayerState() : -1;
-            if (centerBtn) {
-                if (state !== 1) {
-                    centerBtn.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
-                }
-            }
-            if (shield) {
-                if (state !== 1) shield.classList.remove('hidden');
-                else shield.classList.add('hidden');
-            }
-            if (modeBtn) {
-                modeBtn.innerHTML = `<span>✨</span><span class="hidden sm:inline">Clean</span> <span>Focus</span>`;
-                modeBtn.className = "hidden xs:inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-indigo-300 bg-indigo-950/70 hover:bg-indigo-900/80 border border-indigo-500/30 rounded-lg transition cursor-pointer shadow-2xs";
-                modeBtn.title = "Switch to Native YouTube Mode";
-            }
-        } else {
-            if (cropper) cropper.classList.remove('crop-clean-focus');
-            if (clickSurface) {
-                clickSurface.classList.add('hidden', 'pointer-events-none');
-            }
-            if (centerBtn) centerBtn.classList.add('hidden');
-            if (shield) shield.classList.add('hidden');
-            if (focusControls) focusControls.classList.add('hidden');
-            if (nativeBanner) nativeBanner.classList.remove('hidden');
-            if (modeBtn) {
-                modeBtn.innerHTML = `<span>📺</span><span>Native YT</span>`;
-                modeBtn.className = "hidden xs:inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-amber-300 bg-amber-950/70 hover:bg-amber-900/80 border border-amber-500/30 rounded-lg transition cursor-pointer shadow-2xs";
-                modeBtn.title = "Switch to Clean Focus Mode";
-            }
-        }
-    }
-
-    function togglePlayerMode() {
-        const curSec = getCurrentVideoSeconds();
-        const newMode = isCleanMode ? 'native' : 'clean';
-        const iframe = document.getElementById('youtube-player');
-        if (iframe) {
-            const baseEmbedUrl = "{{ lesson.youtube_embed_url }}";
-            if (baseEmbedUrl) {
-                if (newMode === 'native') {
-                    iframe.src = `${baseEmbedUrl}?enablejsapi=1&origin={{ request.scheme }}://{{ request.get_host }}&rel=0&controls=1&start=${curSec}`;
-                } else {
-                    iframe.src = `${baseEmbedUrl}?enablejsapi=1&origin={{ request.scheme }}://{{ request.get_host }}&rel=0&iv_load_policy=3&modestbranding=1&controls=0&playsinline=1&cc_load_policy=0&start=${curSec}`;
-                }
-            }
-        }
-        applyPlayerMode(newMode);
-    }
-
-    function setPlayerMode(mode) {
-        if (mode === (isCleanMode ? 'clean' : 'native')) return;
-        togglePlayerMode();
-    }
-
-    function applyInitialPlayerMode() {
-        const saved = localStorage.getItem('workspace_player_mode');
-        if (saved === 'native') {
-            applyPlayerMode('native');
-        } else {
-            applyPlayerMode('clean');
-        }
-    }
-
-    // Global Hotkeys for Clean Focus Player
+    // Global Hotkeys for Video & Notes
     document.addEventListener('keydown', (e) => {
         const tag = document.activeElement ? document.activeElement.tagName : '';
         if (tag === 'INPUT' || tag === 'TEXTAREA' || (document.activeElement && document.activeElement.isContentEditable)) {
@@ -1609,49 +723,32 @@
         if (e.code === 'Space' || e.code === 'KeyK') {
             e.preventDefault();
             togglePlayPause();
-        } else if (e.code === 'KeyC') {
-            e.preventDefault();
-            toggleSubtitles();
         } else if (e.code === 'KeyJ' || e.code === 'ArrowLeft') {
             e.preventDefault();
-            seekRelative(e.code === 'ArrowLeft' ? -5 : -10);
+            if (plyrPlayer) plyrPlayer.rewind(e.code === 'ArrowLeft' ? 5 : 10);
         } else if (e.code === 'KeyL' || e.code === 'ArrowRight') {
             e.preventDefault();
-            seekRelative(e.code === 'ArrowRight' ? 5 : 10);
+            if (plyrPlayer) plyrPlayer.forward(e.code === 'ArrowRight' ? 5 : 10);
         } else if (e.code === 'KeyM') {
             e.preventDefault();
-            toggleMute();
+            if (plyrPlayer) plyrPlayer.muted = !plyrPlayer.muted;
         } else if (e.code === 'KeyF') {
             e.preventDefault();
-            togglePlayerFullscreen();
+            if (plyrPlayer && plyrPlayer.fullscreen) plyrPlayer.fullscreen.toggle();
         } else if (e.code === 'ArrowUp') {
             e.preventDefault();
-            if (ytPlayer && ytReady && typeof ytPlayer.getVolume === 'function') {
-                const newVol = Math.min(100, ytPlayer.getVolume() + 10);
-                setPlayerVolume(newVol);
-                const slider = document.getElementById('focus-volume-slider');
-                if (slider) slider.value = newVol;
-            }
+            if (plyrPlayer) plyrPlayer.volume = Math.min(1, plyrPlayer.volume + 0.1);
         } else if (e.code === 'ArrowDown') {
             e.preventDefault();
-            if (ytPlayer && ytReady && typeof ytPlayer.getVolume === 'function') {
-                const newVol = Math.max(0, ytPlayer.getVolume() - 10);
-                setPlayerVolume(newVol);
-                const slider = document.getElementById('focus-volume-slider');
-                if (slider) slider.value = newVol;
-            }
-        } else if (e.code.startsWith('Digit') && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
-            const digit = parseInt(e.code.replace('Digit', ''), 10);
-            if (!isNaN(digit) && ytPlayer && ytReady && typeof ytPlayer.getDuration === 'function') {
-                e.preventDefault();
-                const duration = ytPlayer.getDuration();
-                if (duration > 0) {
-                    ytPlayer.seekTo((digit / 10) * duration, true);
-                    updateFocusPlayerProgress();
-                }
-            }
+            if (plyrPlayer) plyrPlayer.volume = Math.max(0, plyrPlayer.volume - 0.1);
         }
     });
+
+    function togglePlayPause() {
+        if (plyrPlayer) {
+            plyrPlayer.togglePlay();
+        }
+    }
 
     // Option B: Chapters Data & Navigation State
     let chaptersList = [
@@ -1677,12 +774,11 @@
 
     // Seek to given timestamp
     function seekToTime(seconds) {
-        if (ytPlayer && ytReady && typeof ytPlayer.seekTo === 'function') {
-            ytPlayer.seekTo(seconds, true);
-            ytPlayer.playVideo();
-            updateFocusPlayerProgress();
+        if (plyrPlayer) {
+            plyrPlayer.currentTime = seconds;
+            plyrPlayer.play();
         } else {
-            const iframe = document.getElementById('youtube-player');
+            const iframe = document.querySelector('#player iframe');
             if (iframe && iframe.contentWindow) {
                 iframe.contentWindow.postMessage(JSON.stringify({
                     event: 'command',
@@ -1885,10 +981,29 @@
     }
 
     function getCurrentVideoSeconds() {
-        if (ytPlayer && typeof ytPlayer.getCurrentTime === 'function') {
-            return Math.floor(ytPlayer.getCurrentTime());
+        if (plyrPlayer && typeof plyrPlayer.currentTime !== 'undefined') {
+            return Math.floor(plyrPlayer.currentTime);
         }
         return 0;
+    }
+
+    function checkActiveChapter() {
+        if (!chaptersList || chaptersList.length === 0) return;
+        const curSec = getCurrentVideoSeconds();
+        if (curSec <= 0) return;
+
+        let activeIdx = 0;
+        for (let i = 0; i < chaptersList.length; i++) {
+            if (chaptersList[i].time_seconds <= curSec) {
+                activeIdx = i;
+            } else {
+                break;
+            }
+        }
+        if (activeIdx !== currentChapterIndex) {
+            currentChapterIndex = activeIdx;
+            updateChapterPillOnly();
+        }
     }
 
     function formatSeconds(totalSecs) {
@@ -2469,11 +1584,7 @@
 
     // Initialize Workspace State
     (function initWorkspaceState() {
-        if (typeof applyInitialPlayerMode === 'function') {
-            applyInitialPlayerMode();
-            initScrubBar();
-            initControlsVisibility();
-        }
+
 
         if (typeof chaptersList !== 'undefined') {
             chaptersList.sort((a, b) => a.time_seconds - b.time_seconds);
