@@ -141,7 +141,7 @@
             <div class="flex justify-between items-center h-16">
                 <!-- Branding -->
                 <div class="flex items-center space-x-8">
-                    <a href="{% url 'courses:campus_feed' %}" class="flex items-center space-x-2.5 group">
+                    <a href="{% url 'courses:dashboard' %}" class="flex items-center space-x-2.5 group">
                         <div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black text-lg shadow-sm shadow-indigo-200 dark:shadow-none group-hover:bg-indigo-700 transition">
                             ⚡
                         </div>
@@ -152,12 +152,9 @@
 
                     <!-- Navigation Links -->
                     <nav class="hidden md:flex space-x-1">
-                        <a href="{% url 'courses:campus_feed' %}" class="px-3 py-2 rounded-lg text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
-                            🌐 Campus Feed
-                        </a>
                         {% if user.is_authenticated %}
                         <a href="{% url 'courses:dashboard' %}" class="px-3 py-2 rounded-lg text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
-                            📚 My Dashboard
+                            📚 My Courses
                         </a>
                         {% endif %}
                     </nav>

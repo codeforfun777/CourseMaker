@@ -103,9 +103,8 @@ class CourseViewsTestCase(TestCase):
 
     def test_campus_feed_view(self):
         response = self.client.get(reverse('courses:campus_feed'))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Public Python Course')
-        self.assertNotContains(response, 'Bob Secret Course')
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('courses:dashboard'), response.url)
 
     def test_dashboard_redirects_unauthenticated(self):
         response = self.client.get(reverse('courses:dashboard'))
@@ -122,13 +121,17 @@ class CourseViewsTestCase(TestCase):
         response = self.client.post(reverse('courses:dashboard'), {
             'title': 'New Django Mastery',
             'description': 'Master Django fast',
-            'is_public': True
         })
         self.assertEqual(response.status_code, 302)
         new_course = Course.objects.get(title='New Django Mastery')
         self.assertEqual(new_course.user, self.user)
 
-    def test_course_detail_public_access(self):
+    def test_course_detail_unauthenticated_redirects(self):
+        response = self.client.get(reverse('courses:course_detail', args=[self.public_course.pk]))
+        self.assertEqual(response.status_code, 302)
+
+    def test_course_detail_owner_access(self):
+        self.client.login(username='alice', password='password123')
         response = self.client.get(reverse('courses:course_detail', args=[self.public_course.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Python Basics')

@@ -17,11 +17,8 @@ logger = logging.getLogger(__name__)
 
 
 def campus_feed(request):
-    """Public campus discovery feed listing all published courses."""
-    public_courses = Course.objects.filter(is_public=True).select_related('user').prefetch_related('modules__lessons')
-    return render(request, 'courses/campus_feed.html', {
-        'courses': public_courses,
-    })
+    """Campus discovery feed has been disabled; redirects to user dashboard."""
+    return redirect('courses:dashboard')
 
 
 @login_required
@@ -41,26 +38,27 @@ def dashboard(request):
 
     total_courses = courses.count()
     completed_courses = sum(1 for c in courses if c.total_lessons_count > 0 and c.progress_percentage == 100)
+    in_progress_courses = total_courses - completed_courses
 
     return render(request, 'courses/dashboard.html', {
         'courses': courses,
         'course_form': course_form,
         'total_courses': total_courses,
         'completed_courses': completed_courses,
+        'in_progress_courses': in_progress_courses,
     })
 
 
+@login_required
 def course_detail(request, pk):
     """Course structure editor allowing users to organize modules and lessons."""
     course = get_object_or_404(Course.objects.prefetch_related('modules__lessons'), pk=pk)
-    is_owner = request.user.is_authenticated and course.user == request.user
-
-    # If the course is private and the user is not the owner, deny access
-    if not course.is_public and not is_owner:
+    if course.user != request.user:
         return HttpResponseForbidden("You do not have permission to view this course.")
 
-    module_form = ModuleForm() if is_owner else None
-    lesson_form = LessonForm() if is_owner else None
+    is_owner = True
+    module_form = ModuleForm()
+    lesson_form = LessonForm()
 
     return render(request, 'courses/course_detail.html', {
         'course': course,
@@ -149,6 +147,7 @@ def lesson_delete(request, pk):
     return redirect('courses:course_detail', pk=course_pk)
 
 
+@login_required
 def lesson_view(request, pk):
     """The split-screen workspace interface dividing study resource and notes."""
     lesson = get_object_or_404(
@@ -156,13 +155,13 @@ def lesson_view(request, pk):
         pk=pk
     )
     course = lesson.module.course
-    is_owner = request.user.is_authenticated and course.user == request.user
-
-    if not course.is_public and not is_owner:
+    if course.user != request.user:
         return HttpResponseForbidden("You do not have permission to view this lesson.")
 
+    is_owner = True
+
     # If it's a YouTube video and has no timestamps yet, try to auto-fetch YouTuber chapters once
-    if is_owner and lesson.lesson_type == Lesson.LessonType.YOUTUBE and not lesson.timestamps.exists() and lesson.youtube_url:
+    if lesson.lesson_type == Lesson.LessonType.YOUTUBE and not lesson.timestamps.exists() and lesson.youtube_url:
         try:
             chapters = extract_youtube_chapters(lesson.youtube_url)
             for ch in chapters:

@@ -5,11 +5,10 @@ from . import views
 app_name = 'courses'
 
 urlpatterns = [
-    # Campus discovery feed
-    path('', views.campus_feed, name='campus_feed'),
-
-    # User dashboard
-    path('dashboard/', views.dashboard, name='dashboard'),
+    # Root redirects to user's personal dashboard
+    path('', views.dashboard, name='dashboard'),
+    path('dashboard/', views.dashboard, name='dashboard_alias'),
+    path('campus-feed/', views.campus_feed, name='campus_feed'),
 
     # Course management
     path('course/<int:pk>/', views.course_detail, name='course_detail'),
@@ -37,6 +36,6 @@ urlpatterns = [
     # Auth
     path('signup/', views.signup_view, name='signup'),
     path('login/', auth_views.LoginView.as_view(template_name='courses/login.html'), name='login'),
-    path('logout/', auth_views.LogoutView.as_view(next_page='courses:campus_feed'), name='logout'),
+    path('logout/', auth_views.LogoutView.as_view(next_page='courses:login'), name='logout'),
 ]
 

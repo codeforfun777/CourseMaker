@@ -167,7 +167,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # Authentication redirects
 LOGIN_URL = 'courses:login'
 LOGIN_REDIRECT_URL = 'courses:dashboard'
-LOGOUT_REDIRECT_URL = 'courses:campus_feed'
+LOGOUT_REDIRECT_URL = 'courses:login'
 
 # Referrer-Policy required by YouTube embedded iframe player to avoid Error 153
 SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'

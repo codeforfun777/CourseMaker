@@ -34,7 +34,7 @@ class TailwindWidgetMixin:
 class CourseForm(TailwindWidgetMixin, forms.ModelForm):
     class Meta:
         model = Course
-        fields = ['title', 'description', 'is_public']
+        fields = ['title', 'description']
         widgets = {
             'title': forms.TextInput(attrs={'placeholder': 'e.g. Full-Stack Web Development, CS50 Exam Prep'}),
             'description': forms.Textarea(attrs={'placeholder': 'Brief summary of what this custom course covers...'}),
